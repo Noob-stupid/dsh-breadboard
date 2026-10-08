@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    /* 前端半需要 DOM —— 宿主半的 tsconfig.json 故意只有 ES2023（防宿主代码误用 DOM），
+       两半必须分开编译配置；src/client + src/scene 已在 tsconfig.json 的 exclude 里摘出。 */
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* 与宿主半一致：本地导入写显式 .ts 后缀。
+       这里 noEmit，故不需要 rewriteRelativeImportExtensions。 */
+    "allowImportingTsExtensions": true,
+
+    /* 前端产物由 tsdown 打包，DOM 全局来自 lib.dom；不引入 node 类型。 */
+    "types": []
+  },
+  "include": ["src/client", "src/scene"]
+}

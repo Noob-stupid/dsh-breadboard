@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "strict": true,
+    "types": ["node"],
+    "declaration": true,
+    "declarationDir": "lib/types",
+    "outDir": "lib",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "sourceMap": true,
+
+    /* ★ 让同一份源码既能被 `node --test` 直跑（Node 24 原生类型擦除），
+       又能被 tsc 编译成 lib/：导入写显式 `.ts`，编译期自动改写成 `.js`。
+       缺了 allowImportingTsExtensions 会报 TS5097。 */
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src"],
+
+  /* ★ 宿主半专属配置：目标 Node，无 DOM。
+     src/client/** 与 src/scene/** 是**浏览器**代码（document / HTMLElement / ResizeObserver），
+     与宿主半的 lib/target/类型环境根本不同，必须排除，否则 `tsc -p tsconfig.json` 直接红。
+
+     两类代码分属两个 realm、两个构建目标：
+       宿主半 src/index.ts + src/core/** + src/contracts/**  → 本文件，产物 lib/index.js
+       前端半 src/client/** + src/scene/**                   → tsconfig.client.json（lib 含 DOM），
+                                                                产物由 tsdown 打包成 lib/client.js
+
+     ★ 注意 `exclude` 只过滤 include 的初始文件集；若宿主代码 import 了被排除的文件，
+       它仍会被拉进来。所以这条边界要靠「宿主半不得 import 前端半」来维持
+       （见 docs/01-项目定位.md 修正 1：三 realm 之间只经 RPC 通信，不共享模块）。 */
+  "exclude": ["src/client", "src/scene"]
+}
