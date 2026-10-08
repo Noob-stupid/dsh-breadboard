@@ -182,42 +182,75 @@ function resolveShimRoot(): string | undefined {
 
 /** 铺一套可渲染的演示装配。★ 走正常 API，保证与用户操作同一条路径。 */
 function seedDemoAssembly(state: AssemblyState, log: (message: string) => void): void {
-  const pi = state.place('rpi-4b', { x: -0.06, y: restingY('rpi-4b'), z: 0 })
-  if (!pi.ok) {
-    log(`演示装配：放置树莓派失败（${pi.reason}）`)
+  // ══════════════════════════════════════════════════════════════════════════
+  // ★★ 演示装配 = **智座（智能选座系统）座位节点的真实接法**
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // ★ 依据是那个项目自己的文档 `docs/烧录与PIR接线操作指南.md`，不是编的：
+  //
+  //   > 需要的东西：1 块 **ESP32 开发板**、**HC-SR501（PIR 人体感应模块）** 推荐 2 个、杜邦线
+  //   >
+  //   > | HC-SR501 引脚 | 连到 ESP32 | 说明 |
+  //   > |---|---|---|
+  //   > | `VCC` | **5V** | HC-SR501 工作电压较高，5V 更稳 |
+  //   > | `OUT`（第 1 个） | **`GPIO23`**（→ 固件 `ir_front`） | 检测到人体移动时输出 HIGH |
+  //   > | `OUT`（第 2 个） | **`GPIO27`**（→ 固件 `ir_back`） | 第二个传感器接这个 |
+  //   > | `GND` | **`GND`** | 两个传感器共地 |
+  //
+  // ★ 为什么演示装配换成这个（而不是树莓派 + BME280）：
+  //   用户的原话是「**你弄那个 D:/MAX_xiangmu 里的真实硬件需求做演示不就行了**」——
+  //   用一个**真实项目真正在用的**接线，比用一个凑出来的教学例子有价值得多：
+  //   它既能验证沙盒，也能被那个项目**端到端地检验**（虚拟设备发 HTTP 到真服务）。
+  //
+  // ★ 逐针建模在这里**立刻有了用处**：`GPIO23` 与 `GPIO27` 是两个**具体的引脚**，
+  //   而不是"某个 GPIO 端口"。接错一根，`unconnected_port` 会指名道姓地说出是哪个脚。
+  const board = state.place('esp32-seat-sensor', { x: 0, y: restingY('esp32-seat-sensor'), z: 0 })
+  if (!board.ok) {
+    log(`演示装配：放置 ESP32 失败（${board.reason}）`)
     return
   }
-  const sensor = state.place('bme280', { x: 0.02, y: restingY('bme280'), z: 0 })
-  if (!sensor.ok) {
-    log(`演示装配：放置 BME280 失败（${sensor.reason}）`)
+  const front = state.place('hc-sr501', { x: -0.05, y: restingY('hc-sr501'), z: -0.03 })
+  if (!front.ok) {
+    log(`演示装配：放置 PIR#1（ir_front）失败（${front.reason}）`)
     return
   }
-  // ★★ 逐针建模后，一次完整的 I2C 接法是 **4 根线**，不是 1 根。
+  const back = state.place('hc-sr501', { x: -0.05, y: restingY('hc-sr501'), z: 0.03 })
+  if (!back.ok) {
+    log(`演示装配：放置 PIR#2（ir_back）失败（${back.reason}）`)
+    return
+  }
+
+  // 引脚对照（ESP32 DevKit V1 的 30 针表）：
+  //   E29 = 5V   E14 = GND   E4 = GPIO23   E19 = GPIO27
   //
-  //   原来（逻辑端口时代）只连一根：`I2C1 → I2C` —— 因为那时 `I2C1` **一个端口代表
-  //   SDA+SCL 两根线**。那个模型**表达不出"接了一根忘了另一根"**，
-  //   而这正是初学者最经典的接线错误。
-  //
-  //   ⇒ 现在按真机接：**VCC / GND / SDA / SCL 各一根**。
-  //     这四根少任何一根，`unconnected_port` 都会报出来。
-  const wiring: readonly (readonly [string, string, string])[] = [
-    ['P1', '3V3', 'VCC'],
-    ['P6', 'GND', 'GND'],
-    ['P3', 'GPIO2 · SDA1', 'SDA'],
-    ['P5', 'GPIO3 · SCL1', 'SCL'],
+  // ★ 5V 与 GND 标记为 `shared`：**它们在这条装配里是"电源轨"** ——
+  //   两个 PIR 共用同一路 5V 与同一个地，真机上就是面包板的两条轨。
+  //   （单看一个排针脚确实只插得下一根杜邦线；`shared` 表达的是**轨**，不是**脚**。）
+  const wiring: readonly (readonly [string, string, string, string])[] = [
+    ['VCC', '5V', 'E29', 'PIR#1 供电'],
+    ['GND', 'GND', 'E14', 'PIR#1 共地'],
+    ['OUT', 'GPIO23（ir_front）', 'E4', 'PIR#1 信号'],
+    ['VCC', '5V', 'E29', 'PIR#2 供电'],
+    ['GND', 'GND', 'E14', 'PIR#2 共地'],
+    ['OUT', 'GPIO27（ir_back）', 'E19', 'PIR#2 信号'],
   ]
-  for (const [piPort, piName, sensorPort] of wiring) {
+  const targets = [front, front, front, back, back, back]
+  for (let i = 0; i < wiring.length; i += 1) {
+    const [pirPort, boardName, boardPort, note] = wiring[i] as readonly [string, string, string, string]
+    const target = targets[i]
+    if (!target?.ok) continue
     const link = state.connect(
-      { componentId: pi.value.id, portId: piPort },
-      { componentId: sensor.value.id, portId: sensorPort },
+      { componentId: target.value.id, portId: pirPort },
+      { componentId: board.value.id, portId: boardPort },
     )
     if (!link.ok) {
-      log(`演示装配：连线失败（${piName} → ${sensorPort}：${link.reason}）`)
+      log(`演示装配：连线失败（${note}：${pirPort} → ${boardName}，${link.reason}）`)
       return
     }
   }
   log(
-    `演示装配就绪：树莓派 + BME280 已接好 I2C（VCC/GND/SDA/SCL 四根线，revision=${String(state.revision)}）`,
+    `演示装配就绪：ESP32 DevKit + 2×HC-SR501（智座座位节点真实接法：` +
+      `5V/GND 共轨，OUT1→GPIO23=ir_front，OUT2→GPIO27=ir_back；revision=${String(state.revision)}）`,
   )
 }
 

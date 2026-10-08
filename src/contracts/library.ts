@@ -435,7 +435,7 @@ const BREADBOARD_SIZE: Vec3 = { x: 0.165, y: 0.009, z: 0.055 }
  *   的警告（树莓派 PCB 1.6mm vs 含接口 17mm，用错会让板子陷进地面）。
  *   实测参考：常见 ESP32 DevKit 约 55×28mm，加探头与针脚取 15mm 厚。
  */
-const ESP32_SEAT_SENSOR_SIZE: Vec3 = { x: 0.055, y: 0.015, z: 0.028 }
+const ESP32_SEAT_SENSOR_SIZE: Vec3 = { x: 0.05525, y: 0.0126, z: 0.028 }
 /**
  * Adafruit 1893 MPL3115A2 气压/高度传感器 breakout。
  *
@@ -666,49 +666,57 @@ const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
     //     你不会用面包板给一台墙上供电的 ESP32 供电。
     //   ⚠️ 已知简化：若用户真把 VIN 接到装配的 5V，本模型**不会**把它算进预算。
     //     要修就得区分"自供电 / 装配供电"两种模式 —— 那是另一件事，先记在这里。
-    portLayout: {
-      edge: '+z',
-      pitch: PITCH_254,
-      count: 30,
-      inset: 0.0025,
-      height: 0.0031,
-      rows: 2,
-      rowPitch: PITCH_254,
-    },
+    // ★★ 布局按**生成的 ESP32 DevKit 几何**重算（2026-10-08）
+    //
+    //   ⚠️ 关键差异：**DevKit 的两排针在两条长边上（相距 28mm）**，
+    //     不是我最初假设的"相邻双排"（2.54mm 紧挨）。所以：
+    //     · `inset: 0`   —— 两排**对称跨在 z 中线**上，不偏向任何一边
+    //     · `rowPitch: 0.02292` = 28 − 2×2.54 = **22.92mm**（两排针的中心距）
+    //   验算（`library.ts` 的公式：z = half.z − inset ± rowPitch/2）：
+    //     0.014 − 0 − 0.01146 = **−0.01146**，0.014 − 0 + 0.01146 = **+0.01146** ✓
+    //     正是排针所在的两条边内侧 2.54mm 处。
+    //
+    //   `height: 0.00205` = 针杆中点（归一化后）。
+    //     针从 PCB 顶(0.0008) + 底座(0.0025) 起、高 8.5mm ⇒ 0.0033..0.0118；
+    //     包围盒 y 中心在 0.0055 ⇒ 归一化后 −0.0022..+0.0063，**中点 +0.00205** ✓
+    portLayout: { edge: '+z', pitch: PITCH_254, count: 30, inset: 0.014, height: 0.00205, rows: 2, rowPitch: 0.02292 },
     ports: [
-      // ── 左侧（靠天线端）──
+            // ★ 数组顺序 = **几何顺序**：`rows: 2` 按**下标交错**分排（slot 0→第0排、slot 1→第1排…），
+      //   所以必须写成 **E1,E2,E3…**（左、右、左、右…）。
+      //   ⚠️ 原来写成“先左排 15 个、再右排 15 个” ⇒ E1 与 E3 被分到**同一列的不同排**，
+      //     而它们在真机上是**同一条边上的相邻两针**。**排法一错，所有引脚位置全错**，
+      //     而界面上只是“针的位置有点怪”—— **不会报错**。
       { portId: 'E1', name: 'EN', protocol: 'gpio', voltage: 3.3, direction: 'in' },
-      { portId: 'E3', name: 'VP · GPIO36', protocol: 'gpio', voltage: 3.3, direction: 'in' },
-      { portId: 'E5', name: 'VN · GPIO39', protocol: 'gpio', voltage: 3.3, direction: 'in' },
-      { portId: 'E7', name: 'GPIO34', protocol: 'gpio', voltage: 3.3, direction: 'in' },
-      { portId: 'E9', name: 'GPIO35', protocol: 'gpio', voltage: 3.3, direction: 'in' },
-      { portId: 'E11', name: 'GPIO32', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-      { portId: 'E13', name: 'GPIO33', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-      { portId: 'E15', name: 'GPIO25', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-      { portId: 'E17', name: 'GPIO26', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-      { portId: 'E19', name: 'GPIO27', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-      { portId: 'E21', name: 'GPIO14 · HSPI_CLK', protocol: 'spi', voltage: 3.3, direction: 'io' },
-      { portId: 'E23', name: 'GPIO12 · HSPI_MISO', protocol: 'spi', voltage: 3.3, direction: 'io' },
-      { portId: 'E25', name: 'GPIO13 · HSPI_MOSI', protocol: 'spi', voltage: 3.3, direction: 'io' },
-      { portId: 'E27', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground' },
-      { portId: 'E29', name: 'VIN', protocol: 'power', voltage: 5, direction: 'in' },
-      // ── 右侧 ──
       { portId: 'E2', name: '3V3', protocol: 'power', voltage: 3.3, direction: 'power' },
+      { portId: 'E3', name: 'VP · GPIO36', protocol: 'gpio', voltage: 3.3, direction: 'in' },
       { portId: 'E4', name: 'GPIO23 · VSPI_MOSI', protocol: 'spi', voltage: 3.3, direction: 'io' },
+      { portId: 'E5', name: 'VN · GPIO39', protocol: 'gpio', voltage: 3.3, direction: 'in' },
       { portId: 'E6', name: 'GPIO22 · SCL', protocol: 'i2c', voltage: 3.3, direction: 'io', shared: true },
+      { portId: 'E7', name: 'GPIO34', protocol: 'gpio', voltage: 3.3, direction: 'in' },
       { portId: 'E8', name: 'TX0 · GPIO1', protocol: 'uart', voltage: 3.3, direction: 'out' },
+      { portId: 'E9', name: 'GPIO35', protocol: 'gpio', voltage: 3.3, direction: 'in' },
       { portId: 'E10', name: 'RX0 · GPIO3', protocol: 'uart', voltage: 3.3, direction: 'in' },
+      { portId: 'E11', name: 'GPIO32', protocol: 'gpio', voltage: 3.3, direction: 'io' },
       { portId: 'E12', name: 'GPIO21 · SDA', protocol: 'i2c', voltage: 3.3, direction: 'io', shared: true },
-      { portId: 'E14', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground' },
+      { portId: 'E13', name: 'GPIO33', protocol: 'gpio', voltage: 3.3, direction: 'io' },
+      { portId: 'E14', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground', shared: true },
+      { portId: 'E15', name: 'GPIO25', protocol: 'gpio', voltage: 3.3, direction: 'io' },
       { portId: 'E16', name: 'GPIO19 · VSPI_MISO', protocol: 'spi', voltage: 3.3, direction: 'io' },
+      { portId: 'E17', name: 'GPIO26', protocol: 'gpio', voltage: 3.3, direction: 'io' },
       { portId: 'E18', name: 'GPIO18 · VSPI_CLK', protocol: 'spi', voltage: 3.3, direction: 'out' },
+      { portId: 'E19', name: 'GPIO27', protocol: 'gpio', voltage: 3.3, direction: 'io' },
       { portId: 'E20', name: 'GPIO5 · VSPI_CS', protocol: 'spi', voltage: 3.3, direction: 'out' },
+      { portId: 'E21', name: 'GPIO14 · HSPI_CLK', protocol: 'spi', voltage: 3.3, direction: 'io' },
       { portId: 'E22', name: 'GPIO17', protocol: 'gpio', voltage: 3.3, direction: 'io' },
+      { portId: 'E23', name: 'GPIO12 · HSPI_MISO', protocol: 'spi', voltage: 3.3, direction: 'io' },
       { portId: 'E24', name: 'GPIO16', protocol: 'gpio', voltage: 3.3, direction: 'io' },
+      { portId: 'E25', name: 'GPIO13 · HSPI_MOSI', protocol: 'spi', voltage: 3.3, direction: 'io' },
       { portId: 'E26', name: 'GPIO4', protocol: 'gpio', voltage: 3.3, direction: 'io' },
+      { portId: 'E27', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground', shared: true },
       { portId: 'E28', name: 'GPIO0 · BOOT', protocol: 'gpio', voltage: 3.3, direction: 'in' },
+      { portId: 'E29', name: '5V', protocol: 'power', voltage: 5, direction: 'power', shared: true },
       { portId: 'E30', name: 'GPIO2', protocol: 'gpio', voltage: 3.3, direction: 'io' },
-    ],
+],
     /**
      * ★ **0 是刻意的，不是漏填。**
      *
@@ -752,6 +760,42 @@ const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
     ],
     i2cAddress: 0x60,
     powerDrawW: 0.002,
+    powerSupplyW: 0,
+  },
+
+  /**
+   * **HC-SR501 PIR 人体感应模块** —— 智座（智能选座系统）座位传感器用的就是它。
+   *
+   * ★ 来源：**按真机尺寸程序化生成的 GLB**（`tools/_gen_zhizuo_models.py`），
+   *   不是从模型库下载的 —— step.parts 上 **PIR / HC-SR501 / motion sensor 全部 0 结果**
+   *   （那个库只有开发板 + 机械件 + PCB 封装，分立元件与通用模块不在覆盖范围）。
+   *
+   * ★ 外形特征（可辨认，不是盒子）：PCB + **菲涅尔半球罩**（直径 23mm）+ 3 引脚 + 两个电位器。
+   *   实测包围盒 **32.00 × 21.60 × 24.00 mm**（含向下伸出的 8.5mm 引脚）。
+   *
+   * ★ 接线（智座 `docs/烧录与PIR接线操作指南.md` 的真实接法）：
+   *   | PIR  | 接到 ESP32 |
+   *   |---|---|
+   *   | VCC | **5V** |
+   *   | OUT | **GPIO23**（第 1 个 → 固件 `ir_front`）/ **GPIO27**（第 2 个 → `ir_back`） |
+   *   | GND | GND |
+   */
+  'hc-sr501': {
+    key: 'hc-sr501',
+    label: 'HC-SR501 PIR 人体感应模块',
+    size: { x: 0.032, y: 0.0216, z: 0.024 },
+    // 3 个引脚在**一条短边上**、沿 z 排，间距 2.54mm；`inset` = 从 −x 边到引脚的距离（1.5mm）
+    // `height: -0.00655` = 引脚**中点**（引脚朝下伸出，归一化后跨 −0.0108..−0.0023）
+    portLayout: { edge: '-x', pitch: PITCH_254, count: 3, inset: 0.0015, height: -0.00655, order: ['VCC', 'OUT', 'GND'] },
+    ports: [
+      // VCC 是**受电**脚（它消耗 5V），所以 direction='in' 而不是 'power' ——
+      // 这样它与 ESP32 的 5V（direction='power'）相接才不会被 direction_conflict 误拦。
+      { portId: 'VCC', name: 'VCC', protocol: 'power', voltage: 5, direction: 'in' },
+      { portId: 'OUT', name: 'OUT', protocol: 'gpio', voltage: 3.3, direction: 'out' },
+      { portId: 'GND', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground' },
+    ],
+    // 由 ESP32 的 5V 供电 ⇒ 不从装配取电（同 esp32-seat-sensor 的理由）
+    powerDrawW: 0,
     powerSupplyW: 0,
   },
 

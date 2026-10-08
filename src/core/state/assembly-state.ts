@@ -281,7 +281,31 @@ export class AssemblyState {
     // 不能把组件连到自己身上
     if (from.componentId === to.componentId) return { ok: false, reason: 'protocol_mismatch' }
 
-    if (a.port.protocol !== b.port.protocol) return { ok: false, reason: 'protocol_mismatch' }
+    // ★★ `gpio` 是**通用脚**，能与任何信号协议相接（2026-10-08 修）
+    //
+    //   ⚠️ 症状：智座的真实接法 `HC-SR501.OUT(gpio) → ESP32.GPIO23` **被拒**，
+    //     理由是 `protocol_mismatch` —— 因为我把 ESP32 的 GPIO23 标成了 `spi`
+    //     （它确实是 VSPI 的 MOSI 脚）。
+    //
+    //   ★ 这暴露的是**模型的表达力不足**，不是接线错了：
+    //     **ESP32 的引脚是复用的** —— 同一个物理脚，配成 SPI 就是 MOSI，
+    //     配成普通 IO 就是一个 GPIO。而 `protocol` 是**单个值**，表达不了"复用"。
+    //     智座用的正是它的 GPIO 身份（PIR 信号输入），所以这是**完全正确的接线**。
+    //
+    //   ⇒ 判据修正为：**`gpio` 与任何信号协议都能相接。**
+    //     理由是**物理事实**：任何信号协议都能在 GPIO 上用软件实现（bit-bang），
+    //     所以"GPIO 接 SPI"不是错配，而是**最常用的做法之一**。
+    //
+    //   ⚠️ 这不等于放松校验：**`i2c ↔ spi` / `spi ↔ uart` 这类真错配仍然被拦** ——
+    //     它们之间没有"通用脚"这个桥梁。
+    const signal = (p: Protocol): boolean =>
+      p === 'i2c' || p === 'spi' || p === 'uart' || p === 'gpio'
+    const gpioBridge =
+      (a.port.protocol === 'gpio' && signal(b.port.protocol)) ||
+      (b.port.protocol === 'gpio' && signal(a.port.protocol))
+    if (a.port.protocol !== b.port.protocol && !gpioBridge) {
+      return { ok: false, reason: 'protocol_mismatch' }
+    }
 
     // ★★ 拒绝**完全重复**的连接（同一对端口之间已有一根线）。
     //
