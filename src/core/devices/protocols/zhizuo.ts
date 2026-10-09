@@ -165,6 +165,12 @@ export const zhizuoSensorAdapter: NetworkProtocolAdapter = {
     '智座（智能选座系统）的座位传感器设备：开机注册 → 拉配置 → 周期上报双红外读数。' +
     '释放需要连续 2 次"无人"上报（真机行为）。',
   readingKeys: ['ir_front', 'ir_back'],
+  // ★★ 这两个脚来自智座**自己的固件与接线文档** —— 换一台设备也是这两个脚，
+  //   所以它是协议级默认值，不是某一台设备的配置。
+  //   来源：`D:\MAX_xiangmu\docs\烧录与PIR接线操作指南.md`
+  //     「OUT（第 1 个）→ GPIO23（→ 固件 ir_front）；OUT（第 2 个）→ GPIO27（→ ir_back）」
+  //   ★ 有了它，`hw_set_occlusion` 才能把「遮挡装配里的 PIR」传导到读数上。
+  defaultPinMap: { ir_front: 'GPIO23', ir_back: 'GPIO27' },
 
   async register(ctx: NetworkCallContext): Promise<NetworkCallOutcome> {
     const raw = await call(ctx, `${ctx.endpoint}/api/sensor/device/register`, {

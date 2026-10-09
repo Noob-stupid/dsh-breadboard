@@ -139,6 +139,30 @@ export class AssemblyState {
    *   ★ 用可选对象而不是第 4 个位置参数：调用方常常只想给 id 不给 network，
    *     位置参数会逼出 `place(m, p, 'x', undefined)` 这种读不懂的调用。
    */
+  /**
+   * **把联网绑定挂到一台已经放好的组件上**（而不是新放一台）。
+   *
+   * ★ 为什么需要它 —— 这是"硬件在环"能不能成立的关键一环：
+   *   真机里**那台 ESP32 本身就是座位传感器**：PIR 接在它的 GPIO 上，它自己出网上报。
+   *   如果联网设备必须是**另一个**组件，那么"遮挡装配里的 PIR"就永远传不到它身上
+   *   —— 接线关系断了，整个 `hw_set_occlusion` 就没有意义。
+   *
+   * ★ 只允许挂到**还没有绑定**的组件上：覆盖已有绑定会让"这台接的是哪个系统"
+   *   变成一个可以被随手改掉的字段，而端点/设备号是**已经在跑**的东西。
+   *   要改就先解绑（未来若有需要再加），**不要让它静默换掉**。
+   */
+  setNetwork(componentId: string, network: NetworkBinding): StateResult<ComponentSpec> {
+    const current = this.#components.get(componentId)
+    if (current === undefined) return fail<ComponentSpec>('unknown_hardware_model')
+    if (current.network !== undefined) {
+      return fail<ComponentSpec>('already_connected')
+    }
+    const next: ComponentSpec = { ...current, network }
+    this.#components.set(componentId, next)
+    this.#touch()
+    return ok(next)
+  }
+
   place(
     hardwareModel: string,
     position: Vec3,

@@ -125,9 +125,24 @@ export function createNetworkTools(deps: NetworkToolDeps): HardwareToolDefinitio
           z: typeof pos.z === 'number' ? pos.z : 0.1,
         }
 
-        const placed = state.place(NETWORK_DEVICE_MODEL, position, componentId, {
-          network: { protocol, endpoint, deviceId },
-        })
+        // ★★ 两种用法，都有真实对应：
+        //   ① `componentId` **不存在** ⇒ 新建一台联网设备组件（原来只有这条）
+        //   ② `componentId` **已存在** ⇒ 把绑定**挂到那台组件上**
+        //
+        //   ② 才是真机的样子：**那台 ESP32 本身就是座位传感器** ——
+        //   PIR 接在它的 GPIO 上、它自己出网上报。若强制新建一个组件，
+        //   接线关系就断了，"遮挡装配里的 PIR"永远传不到上报方身上。
+        const adapterPinMap = registry.adapterFor(protocol)?.defaultPinMap
+        const binding = {
+          protocol,
+          endpoint,
+          deviceId,
+          ...(adapterPinMap !== undefined ? { pinMap: adapterPinMap } : {}),
+        }
+        const existing = state.snapshot().components.some((c) => c.id === componentId)
+        const placed = existing
+          ? state.setNetwork(componentId, binding)
+          : state.place(NETWORK_DEVICE_MODEL, position, componentId, { network: binding })
         if (!placed.ok) return { ok: false, componentId, reason: placed.reason }
 
         // 未知协议会被注册表记进 problems —— 如实报出来，不让用户以为加成功了
@@ -373,5 +388,118 @@ export function createNetworkTools(deps: NetworkToolDeps): HardwareToolDefinitio
         return { ok: true, componentId, reading: { ...device.snapshot().reading } }
       },
     },
+
+    /* ── ⑤ 遮挡：**沿实际接线**传导，而不是直接设数字 ── */
+    {
+      name: 'hw_set_occlusion',
+      description:
+        '把装配里某个器件**遮挡/移开**（如人手挡住 PIR），并**沿实际接线**把影响传导到联网设备的读数上。' +
+        '★ 与 hw_network_set_reading 的区别：那个是**直接设数字**（只测协议对不对），' +
+        '这个是**从物理状态出发** —— 器件没接上、或接错了脚，就什么都不会发生（真机就是这样）。' +
+        '★ 智座的两个 PIR：遮挡接在 GPIO23 的那个 → ir_front，接在 GPIO27 的 → ir_back。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          componentId: { type: 'string', description: '被遮挡的器件（如 PIR）的组件 id。' },
+          occluded: { type: 'boolean', description: 'true = 被遮挡（探测到人）；false = 移开。' },
+        },
+        required: ['componentId', 'occluded'],
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean' },
+            componentId: { type: 'string' },
+            occluded: { type: 'boolean' },
+            affected: { type: 'array', items: { type: 'string' } },
+            reason: { type: 'string' },
+          },
+          required: ['ok', 'componentId', 'occluded', 'affected'],
+        },
+        render: (_args, value) => {
+          const result = asRecord(value)
+          const affected = Array.isArray(result.affected) ? result.affected.map(String) : []
+          const head = `${String(result.componentId)} 已${result.occluded === true ? '遮挡' : '移开'}`
+          if (result.ok !== true) return text(`${head}，但传导失败：${String(result.reason ?? '未知原因')}`)
+          if (affected.length === 0) {
+            return text(`${head}。${String(result.reason ?? '但没有传导到任何联网设备')}`)
+          }
+          return text(`${head} ⇒ ${affected.join('；')}。设备会在下一个上报周期发出去。`)
+        },
+      },
+      execute: async (args) => {
+        const input = asRecord(args)
+        const componentId = typeof input.componentId === 'string' ? input.componentId : ''
+        const occluded = input.occluded === true
+        const snapshot = state.snapshot()
+        const me = snapshot.components.find((candidate) => candidate.id === componentId)
+        if (me === undefined) {
+          return { ok: false, componentId, occluded, affected: [], reason: '找不到这个组件' }
+        }
+
+        // ★★ 下面这段是"硬件在环"的实际含义：**读数由接线决定，不由调用者决定。**
+        //   从被遮挡的器件出发，沿着它身上每一根线走到对端；
+        //   对端若是**带 network 绑定的组件**（= 一台联网设备），
+        //   就看这次遮挡落在它 `pinMap` 里的哪个**读数名**上。
+        const wires = snapshot.connections.filter(
+          (cable) => cable.from.componentId === componentId || cable.to.componentId === componentId,
+        )
+        if (wires.length === 0) {
+          return {
+            ok: true,
+            componentId,
+            occluded,
+            affected: [],
+            reason: `${me.label} 一根线都没接 ⇒ 遮挡不会传导到任何地方（真机同理）`,
+          }
+        }
+
+        const affected: string[] = []
+        for (const cable of wires) {
+          const far = cable.from.componentId === componentId ? cable.to : cable.from
+          const device = registry.deviceFor(far.componentId)
+          if (device === undefined) continue
+          const board = snapshot.components.find((candidate) => candidate.id === far.componentId)
+          const pinMap = board?.network?.pinMap
+          if (pinMap === undefined) continue
+          const farPort = board?.ports.find((port) => port.portId === far.portId)
+          if (farPort === undefined) continue
+          for (const [readingKey, pin] of Object.entries(pinMap)) {
+            if (!pinMatches(farPort.name, pin)) continue
+            // setReading 是**合并**语义 ⇒ 只改这一个读数，不动别的
+            device.setReading({ [readingKey]: occluded })
+            affected.push(`${readingKey}=${String(occluded)}（${pin}）→ ${board?.label ?? far.componentId}`)
+          }
+        }
+
+        if (affected.length === 0) {
+          return {
+            ok: true,
+            componentId,
+            occluded,
+            affected,
+            reason:
+              `${me.label} 接了 ${String(wires.length)} 根线，但没有一根落在某台联网设备的 ` +
+              'pinMap 上（可能是接到了别的脚，或者对面不是联网设备）',
+          }
+        }
+        return { ok: true, componentId, occluded, affected }
+      },
+    },
   ]
+}
+
+/**
+ * 端口丝印名与 `pinMap` 里的引脚名是否指同一个脚。
+ *
+ * ★ 按 `·` 取**前缀**再比：端口的丝印名可能带复用后缀（`'GPIO23 · VSPI_MOSI'`），
+ *   而 `pinMap` 里写的是接线员看得见的那个名字（`'GPIO23'`）。
+ *   不这么比就得让 `library.ts` 里每一处复用名都写全，**错一个字符就静默不生效**。
+ */
+function pinMatches(portName: string, pin: string): boolean {
+  const head = portName.split('·')[0]?.trim() ?? portName
+  return head === pin.trim()
 }

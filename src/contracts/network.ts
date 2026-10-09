@@ -102,6 +102,29 @@ export interface NetworkBinding {
   readonly deviceId: string
   /** 协议特定的附加参数（如座位绑定）。 */
   readonly options?: JsonRecord
+  /**
+   * ★★ **读数 ← 板上的哪个引脚** —— 把「装配里接了什么」和「上报什么」连起来。
+   *
+   * ```ts
+   * pinMap: { ir_front: 'GPIO23', ir_back: 'GPIO27' }   // 键 = 读数名，值 = 端口丝印名
+   * ```
+   *
+   * ★ 为什么需要它（这是"硬件在环"这句话的**实际含义**）：
+   *   没有它时，读数只能由 `hw_network_set_reading` **直接设**——那测的是**协议**，
+   *   数字**从哪来的**完全没被检验。有了它，读数由**实际接线**决定：
+   *
+   * ```text
+   *   遮挡装配里的 PIR  →  沿接线找到 ESP32 的 GPIO23  →  按本表映射到 ir_front  →  上报
+   * ```
+   *
+   * ⇒ **PIR 没接上，遮挡就没有任何效果** —— 这不是缺点，恰恰是**可被测出来的真实行为**
+   *   （真机上把 PIR 拔了，就是不会有读数变化）。
+   *
+   * ⚠️ 值是**端口的丝印名**（`Port.name`），不是 `portId` —— 因为这里的语义是
+   *   "**板子上印着 GPIO23 的那个脚**"，而 `portId`（`E4`）是我们的内部编号，**接线员的语言里没有它**。
+   *   名字里带复用后缀（如 `'GPIO23 · VSPI_MOSI'`）时按**前缀匹配**（见 `matchesPin`）。
+   */
+  readonly pinMap?: Readonly<Record<string, string>>
 }
 
 /* ─────────────────────── 协议适配器 ─────────────────────── */
@@ -182,6 +205,17 @@ export interface NetworkProtocolAdapter {
    *   必须待在**协议自己**这里，而不是散在调用方。
    */
   translate?(config: JsonRecord | undefined, reading: JsonRecord): JsonRecord
+  /**
+   * **默认引脚映射**：读数名 → 板上的引脚丝印名（如 `{ ir_front: 'GPIO23' }`）。
+   *
+   * ★ 它属于**协议**而不是某一台设备：智座的固件写死了「`ir_front` 读 GPIO23、
+   *   `ir_back` 读 GPIO27」——**换一台设备也是这两个脚**。
+   *   所以默认值放这里，`NetworkBinding.pinMap` 只在需要**逐台覆盖**时才写。
+   *
+   * ★ 有了它，`hw_set_occlusion` 才能把「遮挡装配里的 PIR」传导到读数上 ——
+   *   见 {@link NetworkBinding.pinMap} 的说明。
+   */
+  readonly defaultPinMap?: Readonly<Record<string, string>>
 }
 
 /* ─────────────────────── 设备状态 ─────────────────────── */

@@ -84,6 +84,18 @@ export class NetworkRegistry {
     return this.#devices.get(componentId)
   }
 
+  /**
+   * 按协议 id 取适配器。
+   *
+   * ★ 公开它的理由很具体：`hw_network_add` 建绑定时要把适配器的
+   *   `defaultPinMap`（"`ir_front` 在 GPIO23"）**抄进这一台的绑定里**，
+   *   而适配器表在这个类里面 ⇒ 不给访问器，工具就只能自己再维护一份协议表，
+   *   那就是**第二本账**。
+   */
+  adapterFor(protocolId: string): NetworkProtocolAdapter | undefined {
+    return this.#adapters[protocolId]
+  }
+
   /** 全部联网设备（供工具与诊断遍历）。 */
   devices(): readonly NetworkedDevice[] {
     return [...this.#devices.values()]
