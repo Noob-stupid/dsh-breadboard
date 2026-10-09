@@ -358,5 +358,74 @@ export function createHardwareTools(deps: HardwareToolDeps): HardwareToolDefinit
       },
       execute: async () => state.snapshot(),
     },
+
+    /* ── ★★ 修改装配：让 agent 真的能"创作 / 连线" ── */
+    //
+    // ⚠️⚠️ 这个工具补的是一个**真实缺口**：在此之前，`createHardwareTools` 只有
+    //   **读**（`hw_get_assembly`）和**仿真**（`hw_run_simulation` 等）——
+    //   **DS 没有任何办法放器件、连线、移动、旋转。**
+    //   能力一直在宿主里（`/api/action` 那条路由，界面在用），**只是没暴露成工具**。
+    //   ⇒ 别的用户装上这个插件后，他的 agent **只能看，不能动手**。
+    //
+    // ★ 为什么是**一个**工具而不是六个（`hw_place` / `hw_move` / `hw_connect` …）：
+    //   这六个动词的参数形状**就是契约里的 `ClientAction` 联合**。
+    //   拆成六个工具就得在六处重复维护"哪些参数合法"，而**契约一改就会漏**。
+    //   一个工具 + 契约类型 ⇒ 加动作时这里**一行都不用改**。
+    //
+    //   ⚠️ 代价要说清楚：**这个工具对 LLM 比六个具名工具难用** ——
+    //     它得自己拼对 action 的形状。所以下面把**每一种动作的样例**写进描述里，
+    //     而且这件事**正是"技能（Skill）"要承担的**：工具给能力，技能给用法。
+    {
+      name: 'hw_edit_assembly',
+      description:
+        '修改虚拟装配（放器件 / 移动 / 旋转 / 连线 / 拔线 / 删除 / 钉住）。' +
+        '`action` 就是契约里的 ClientAction，常用形状：\n' +
+        '· 放器件 {"kind":"place_component","hardwareModel":"hc-sr501","position":{"x":0,"y":0.0108,"z":0}}\n' +
+        '· 移动   {"kind":"move_component","componentId":"c2","position":{"x":0.05,"y":0.0108,"z":0}}\n' +
+        '· 旋转   {"kind":"set_rotation","componentId":"c2","rotation":{"x":0,"y":1.5708,"z":0}}（弧度，绕自身中心）\n' +
+        '· 连线   {"kind":"connect","from":{"componentId":"c2","portId":"OUT"},"to":{"componentId":"c1","portId":"E4"}}\n' +
+        '· 拔线   {"kind":"disconnect","cableId":"w1"}\n' +
+        '· 删除   {"kind":"remove_component","componentId":"c2"}\n' +
+        '· 钉住   {"kind":"set_pinned","componentId":"c1","pinned":true}\n' +
+        '★ 先 `hw_get_assembly` 看清有哪些组件与端口 id，再改。' +
+        '★ 失败会给出**原因码**（如 protocol_mismatch / voltage_mismatch / port_occupied / component_pinned），' +
+        '照着原因改，不要盲试。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          action: {
+            type: 'object',
+            additionalProperties: true,
+            description: '要执行的 ClientAction，见工具描述里的样例。',
+          },
+        },
+        required: ['action'],
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean' },
+            reason: { type: 'string' },
+            revision: { type: 'number' },
+          },
+          required: ['ok', 'revision'],
+        },
+        render: (_args, value) => {
+          const result = asRecord(value)
+          if (result.ok !== true) {
+            return text(`装配修改被拒：${String(result.reason ?? '未知原因')}（现在还是 revision=${String(result.revision)}）`)
+          }
+          return text(`装配已修改（revision=${String(result.revision)}）。用 hw_get_assembly 看结果。`)
+        },
+      },
+      execute: async (args) => {
+        const action = asRecord(asRecord(args).action)
+        const result = state.applyAction(action as never)
+        return { ok: result.ok, revision: state.revision, ...(result.reason !== undefined ? { reason: result.reason } : {}) }
+      },
+    },
   ]
 }

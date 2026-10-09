@@ -7,7 +7,7 @@
  *   **bundle 插件的前端半根本没有这个符号**（已对整个 checkout 做过 grep 核对）。
  *   本插件是 bundle 插件，所以桥接一律走宿主半 `ctx.webServer.register` + 前端 fetch。
  */
-import type { AssemblySnapshot, HardwareEvent } from './assembly.ts'
+import type { AssemblySnapshot, HardwareEvent, Vec3 } from './assembly.ts'
 
 /** 本插件的全部路由前缀。 */
 export const ROUTE_PREFIX = '/@dsh-breadboard/dsh-hardware-sandbox' as const
@@ -370,6 +370,14 @@ export type ClientAction =
    *   会**朝反方向**执行，而且没人能发现。显式值让重复点击是幂等的。
    */
   | { readonly kind: 'set_pinned'; readonly componentId: string; readonly pinned: boolean }
+  /**
+   * **旋转组件**（欧拉角，弧度，绕**自身几何包围盒中心**）。
+   *
+   * ★ 与 `set_pinned` 一样用**显式值**而不是增量（`+90°`）：增量在"界面以为的角度"
+   *   与"SSOT 实际角度"不一致时（刚 resync 完、或上一次拖动被拒）会**朝错误的方向累加**，
+   *   而且没人能发现。显式值让重放与重试都是幂等的。
+   */
+  | { readonly kind: 'set_rotation'; readonly componentId: string; readonly rotation: Vec3 }
   | { readonly kind: 'connect'; readonly from: { componentId: string; portId: string }; readonly to: { componentId: string; portId: string } }
   | { readonly kind: 'disconnect'; readonly cableId: string }
 

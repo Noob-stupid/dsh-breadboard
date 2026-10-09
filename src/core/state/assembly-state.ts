@@ -241,6 +241,36 @@ export class AssemblyState {
     return ok(updated)
   }
 
+  /**
+   * **旋转一个组件**（欧拉角，弧度，绕**自身原点** = 几何包围盒中心）。
+   *
+   * ★★ 为什么"绕中心转"是这条链能不能用的关键 —— 契约里那条原点约定就是为它定的：
+   *   > `position` 是**包围盒中心**，不是角点。取「居中」而非 CAD 惯用的「min 角」，
+   *   > **决定性理由是旋转枢轴**：原点在角上，组件一转就会**绕角甩出去**。
+   *   ⇒ 所以 `setRotation` **不需要**顺带改 `position`：原点居中的模型转起来是原地转，
+   *     位置语义（"它摆在哪"）保持不变。
+   *
+   * ★ 与 `setPinned` 同样幂等：角度没变就不递增 revision。
+   *   比较用**容差**，因为调用方常常从界面拖动里传来浮点数（`1.5707963267948966` vs `1.5707963`），
+   *   精确相等会把"同一个角度"当成两次修改，**每次指针移动都重建一次场景**。
+   */
+  setRotation(componentId: string, rotation: Vec3): StateResult<ComponentSpec> {
+    const existing = this.#components.get(componentId)
+    if (!existing) return fail<ComponentSpec>('unknown_hardware_model')
+    if (!Number.isFinite(rotation.x) || !Number.isFinite(rotation.y) || !Number.isFinite(rotation.z)) {
+      return fail<ComponentSpec>('bad_params')
+    }
+    const same =
+      Math.abs(existing.rotation.x - rotation.x) < 1e-6 &&
+      Math.abs(existing.rotation.y - rotation.y) < 1e-6 &&
+      Math.abs(existing.rotation.z - rotation.z) < 1e-6
+    if (same) return ok(existing)
+    const updated: ComponentSpec = { ...existing, rotation: { ...rotation } }
+    this.#components.set(componentId, updated)
+    this.#touch()
+    return ok(updated)
+  }
+
   /** 连线。校验不通过时返回失败原因，且**不改动状态**。 */
   connect(from: PortRef, to: PortRef): StateResult<ConnectionSpec> {
     const check = this.validateConnection(from, to)
@@ -274,6 +304,8 @@ export class AssemblyState {
         return this.#toActionResult(this.move(action.componentId, action.position))
       case 'set_pinned':
         return this.#toActionResult(this.setPinned(action.componentId, action.pinned))
+      case 'set_rotation':
+        return this.#toActionResult(this.setRotation(action.componentId, action.rotation))
       case 'connect':
         return this.#toActionResult(this.connect(action.from, action.to))
       case 'disconnect':

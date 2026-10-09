@@ -187,6 +187,9 @@ function eventsForAction(action: ClientAction, state: AssemblyState, at: number)
     case 'set_pinned':
       // 钉住/解开不改变拓扑，只是组件的一个属性 → 用通用状态变更事件让场景重调和。
       return [{ ...base, type: 'hardware/state_changed', revision: snapshot.revision }]
+    case 'set_rotation':
+      // 旋转同理：不改变拓扑，只是组件的一个属性。
+      return [{ ...base, type: 'hardware/state_changed', revision: snapshot.revision }]
     case 'connect': {
       const made = snapshot.connections.findLast(
         (connection) =>

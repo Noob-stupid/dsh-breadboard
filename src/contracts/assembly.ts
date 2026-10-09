@@ -172,6 +172,13 @@ export interface Warning {
 
 /** 警告码。DS 按码分支处理（如 i2c_pullup_missing → 提示加上拉电阻，§8 流程 A）。 */
 export type WarningCode =
+  /**
+   * **动作参数不合法**（如旋转角里带了 `NaN` / `Infinity`）。
+   *
+   * ★ 与 `unknown_hardware_model` 分开：那个是"找不到目标"，这个是"找到了但给的数不能用"。
+   *   合成一个码，调用方会去检查组件 id，而真正的问题在数值上。
+   */
+  | 'bad_params'
   /** ★ 两端电流方向冲突（两个供电输出相接 / 两个输出驱动同一条线）—— Port.direction 的消费者。 */
   | 'direction_conflict'
   | 'protocol_mismatch'
