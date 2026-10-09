@@ -283,3 +283,50 @@ if __name__ == "__main__":
         pos = np.array(mesh.positions)
         size = (pos.max(axis=0) - pos.min(axis=0)) * 1000
         print(f"     包围盒 = {size[0]:.2f} × {size[1]:.2f} × {size[2]:.2f} mm")
+
+
+# ── Adafruit BME280 breakout（真机 19.05 × 17.78mm，4 针）────────────────────
+def build_bme280() -> Mesh:
+    m = Mesh()
+    SX, SZ = 0.01905, 0.01778      # Adafruit 1893 的实测尺寸
+    PCB_T = 0.0016
+    m.add_box((0, 0, 0), (SX, PCB_T, SZ))
+    top = PCB_T / 2
+    # 金属盖传感器（BME280 的辨识特征：一个带孔的金属方盖）
+    m.add_box((0.0, top + 0.0005, 0.0), (0.008, 0.001, 0.008))
+    # 4 个引脚（VCC/GND/SCL/SDA），2.54mm 间距，在一条短边上
+    for dz in (-0.00381, -0.00127, 0.00127, 0.00381):
+        m.add_box((-SX / 2 + 0.0015, -PCB_T / 2 - 0.00425, dz), (0.00032, 0.0085, 0.00032))
+    # 去耦电容（真板上很显眼）
+    for dz in (-0.006, 0.006):
+        m.add_box((SX / 2 - 0.004, top + 0.0006, dz), (0.0016, 0.0012, 0.0008))
+    return m
+
+
+# ── 5V LED 模块（真机 15 × 10mm，3 针 SIG/VCC/GND）──────────────────────────
+def build_led_module() -> Mesh:
+    m = Mesh()
+    SX, SZ = 0.015, 0.010
+    PCB_T = 0.0016
+    m.add_box((0, 0, 0), (SX, PCB_T, SZ))
+    top = PCB_T / 2
+    # LED 本体：圆柱 + 半球顶（5mm 灯珠的辨识特征）
+    m.add_cylinder((0, top + 0.0017, 0), 0.0025, 0.0034, segments=20)
+    m.add_hemisphere((0, top + 0.0034, 0), 0.0025, segments=20, rings=8)
+    # 串联限流电阻
+    m.add_box((0.0045, top + 0.0005, 0), (0.0022, 0.001, 0.0011))
+    # 3 个引脚
+    for dz in (-0.00254, 0.0, 0.00254):
+        m.add_box((-SX / 2 + 0.0012, -PCB_T / 2 - 0.00425, dz), (0.00032, 0.0085, 0.00032))
+    return m
+
+
+if True:
+    for key, builder in (("bme280", build_bme280), ("led-5v", build_led_module)):
+        mesh = builder()
+        target = os.path.join(OUT_DIR, key, "model.bin")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        write_glb(target, mesh)
+        pos = np.array(mesh.positions)
+        size = (pos.max(axis=0) - pos.min(axis=0)) * 1000
+        print(f"     {key}: {size[0]:.2f} × {size[1]:.2f} × {size[2]:.2f} mm")

@@ -425,8 +425,8 @@ export function resolveModel(source: HardwareModelSource): HardwareModel {
 const PITCH_254 = 0.00254
 
 const RPI_SIZE: Vec3 = { x: 0.085, y: 0.017, z: 0.056 }
-const BME280_SIZE: Vec3 = { x: 0.02, y: 0.003, z: 0.018 }
-const LED_SIZE: Vec3 = { x: 0.02, y: 0.01, z: 0.02 }
+const BME280_SIZE: Vec3 = { x: 0.01905, y: 0.0113, z: 0.01778 }
+const LED_SIZE: Vec3 = { x: 0.015, y: 0.016, z: 0.01 }
 const BREADBOARD_SIZE: Vec3 = { x: 0.165, y: 0.009, z: 0.055 }
 /**
  * ESP32 座位传感器（联网设备）。
@@ -584,7 +584,7 @@ const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
     // 排针沿 -x 边、沿 z 排布；★ 几何顺序与声明顺序不同，故显式给 order
     // ★ 逐针：真实 BME280 模块是 **4 针**（VCC/GND/SCL/SDA），原来把 SDA+SCL 并成了一个 `I2C` 端口
     //   ⇒ 一根线代表两根 ⇒ **"接了一根忘了另一根"检测不出来**。拆开。
-    portLayout: { edge: '-x', pitch: PITCH_254, count: 4, inset: 0.004, order: ['VCC', 'GND', 'SCL', 'SDA'] },
+    portLayout: { edge: '-x', pitch: PITCH_254, count: 4, inset: 0.0015, height: -0.0014, order: ['VCC', 'GND', 'SCL', 'SDA'] },
     ports: [
       { portId: 'VCC', name: 'VCC', protocol: 'power', voltage: 3.3, direction: 'in' },
       { portId: 'GND', name: 'GND', protocol: 'power', voltage: 0, direction: 'ground' },
@@ -601,8 +601,13 @@ const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
     key: 'led-5v',
     label: 'LED 模块（5V）',
     size: LED_SIZE,
-    // 沿 +z 边、沿 x 排布；inset 取半深 ⇒ 落在 z=0 中线
-    portLayout: { edge: '+z', pitch: PITCH_254, count: 3, inset: 0.01, order: ['GND', 'SIG', 'VCC'] },
+    // ★ 朝向覆盖：LED 模块的**高度 > 宽度**（灯珠 + 引脚），
+    //   而自动规则是「最薄的轴 → y」⇒ 不加这条它会被**放倒**。
+    //   这是 `ModelOrientation` 这个字段存在的真实理由之一：
+    //   **启发式在"高比宽大"的形状上必然猜错**，而这种形状在小模块里很常见。
+    orientation: { up: '+y', length: '+x' },
+    // 引脚在 −x 边、沿 z 排布（生成模型就是这么做）
+    portLayout: { edge: '-x', pitch: PITCH_254, count: 3, inset: 0.0012, height: -0.00375, order: ['GND', 'SIG', 'VCC'] },
     ports: [
       { portId: 'SIG', name: 'SIG', protocol: 'gpio', voltage: 5, direction: 'in' },
       { portId: 'VCC', name: 'VCC', protocol: 'power', voltage: 5, direction: 'in' },
