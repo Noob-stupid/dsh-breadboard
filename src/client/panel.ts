@@ -163,8 +163,31 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
 
     const unsubscribe = channel.onChange(() => setReady(true))
     void channel.start().then(() => setReady(channel.latest() !== undefined))
-    // 已导入模型清单：失败也不影响场景（没导过模型就用占位盒）
-    void registry.refresh().then(() => setRecords([...registry.list()]))
+    // ★★ 已导入模型清单 —— **必须比"建组件"先到位**（2026-10-09 修）
+    //
+    //   ⚠️⚠️ 原来这里是一句 `void registry.refresh().then(...)`，**不 await**。
+    //     而 `scene.start()` 紧接着就开了 rAF 循环、快照一到就建组件、建的时候去查 registry。
+    //     ⇒ **两个 promise 赛跑**：`refresh()` 先回来 ⇒ 有真模型；快照先到 ⇒ **全是占位盒**。
+    //
+    //   ★ 症状（用户原话）：「**为啥我重启后变成了 3 个普通方块了**」——
+    //     模型文件在磁盘上、`/api/model` 也正常返回 7 个，**宿主一点问题没有**，
+    //     纯粹是客户端这边**谁先谁后**的问题。**而它不会报错。**
+    //     更迷惑的是：在会话里导入一次模型会再次 refresh（`importer.ts`），
+    //     于是"有时候又有"——**看起来像缓存，其实是竞态。**
+    //
+    //   ⇒ 两道保险：
+    //     ① **先 await 清单**，再让通道把快照放进来（消除竞态本身）
+    //     ② 清单到了之后，把**已经建出来的占位盒**换成真模型（覆盖①②仍然交错的极端情况）
+    void (async () => {
+      await registry.refresh()
+      setRecords([...registry.list()])
+      // ② 只要这个型号已经有真模型，就让场景里对应的组件重建一次。
+      //    ★ 先作废 provider 缓存，否则重建时会命中"上次因为没模型而缓存下来的 null"。
+      for (const record of registry.list()) {
+        providerRef.current?.invalidate(record.modelKey)
+        syncRef.current?.rebuildModel(record.modelKey)
+      }
+    })()
     // 聊天能力：缺省 ⇒ 不渲染输入框
     void channel.fetchCapabilities().then((capabilities) => {
       setChatEnabled(capabilities?.chat === true)
