@@ -306,6 +306,37 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
       onSelect: () =>
         void channelRef.current?.dispatch({ kind: 'set_pinned', componentId, pinned: !pinned }),
     })
+
+    // ★★ 旋转（2026-10-09 加）
+    //
+    //   宿主侧一直支持（`ComponentSpec.rotation` + `sync.ts` 会应用它），
+    //   但**界面上没有任何入口** ⇒ 用户看到的"硬件不能转"其实只是**没有旋钮**。
+    //
+    // ★ 与钉住同一条理由：**发绝对值，不发增量**。
+    //   `rotation.y + π/2` 这种增量在"界面以为的角度"与"SSOT 实际角度"不一致时
+    //   （刚 resync 完、上一次旋转被拒）会**朝错误的方向累加**，而且没人能发现。
+    //   这里从**快照**读当前角度、算好绝对值再发 —— 重放与重试都是幂等的。
+    const rotation = channelRef.current
+      ?.latest()
+      ?.components.find((item) => item.id === componentId)?.rotation ?? { x: 0, y: 0, z: 0 }
+    menuItems.push({
+      label: '旋转 90°（平面内）',
+      onSelect: () =>
+        void channelRef.current?.dispatch({
+          kind: 'set_rotation',
+          componentId,
+          rotation: { x: rotation.x, y: rotation.y + Math.PI / 2, z: rotation.z },
+        }),
+    })
+    menuItems.push({
+      label: '翻面 180°（绕长轴）',
+      onSelect: () =>
+        void channelRef.current?.dispatch({
+          kind: 'set_rotation',
+          componentId,
+          rotation: { x: rotation.x + Math.PI, y: rotation.y, z: rotation.z },
+        }),
+    })
     menuItems.push({
       label: '删除组件',
       danger: true,
