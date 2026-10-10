@@ -21,7 +21,7 @@
  * ★ 为什么这些是**数据**而不是代码
  * ══════════════════════════════════════════════════════════════════════════
  *
- * 加一个新项目 = 在 {@link KNOWN_PROJECTS} 里加一条，**不动内核**。
+ * 加一个新项目 = 在 {@link SAMPLE_PROJECTS} 里加一条，**不动内核**。
  * 这与 `DEFAULT_NETWORK_ADAPTERS`（加协议）是同一个手法 ——
  * 而它成立的前提是**这份数据能表达真实项目里所有会变的东西**：
  * 接了哪几个器件、连到哪个脚、连的是哪个服务、**怎么算连上了**。
@@ -149,14 +149,31 @@ const ZHIZUO_SEAT_NODE: ProjectProfile = {
   link: { requires: ['registered', 'config', 'reported', 'reporting'] },
 }
 
-/** 内置项目表。★ 加项目 = 在这里加一条，**不动内核**。 */
-export const KNOWN_PROJECTS: Readonly<Record<string, ProjectProfile>> = {
+/**
+ * **随包样例** —— ⚠️ **不是内置项目**。新用户的项目列表是**空的**。
+ *
+ * ★★ 第一版这里叫 `KNOWN_PROJECTS`，把智座硬编码成"内置项目"。用户把这层说透了：
+ *
+ *   > 别人的插件应该是自己添加项目才对，而不是我们这个懂吗，
+ *   > 别人是自己导入他们的项目，**是空的**
+ *
+ *   对。**智座是我们的演示，不是别人的项目。** 硬编码进来等于告诉所有用户
+ *   "你只能跑这一个系统" —— 而这是个**沙盒**。
+ *
+ * ⇒ 这里只是**一份可以导入的样例**（等价于放在 `examples/` 里的 JSON）。
+ *   真正生效的项目在 `~/.dsh/dsh-hardware-sandbox/projects/*.json`，
+ *   **由用户自己添加 / 导入**（见 `core/projects/store.ts`）。
+ *
+ * ⚠️ 谁都不该在启动时自动把这里的东西写进用户目录 —— 那又变成"内置"了。
+ *   只有用户**显式点导入**时才落盘。
+ */
+export const SAMPLE_PROJECTS: Readonly<Record<string, ProjectProfile>> = {
   [ZHIZUO_SEAT_NODE.id]: ZHIZUO_SEAT_NODE,
 }
 
 /** 项目 id 列表（给界面与工具枚举）。 */
 export function projectIds(): readonly string[] {
-  return Object.keys(KNOWN_PROJECTS)
+  return Object.keys(SAMPLE_PROJECTS)
 }
 
 /**

@@ -393,7 +393,7 @@ export type ClientAction =
    *
    * ★ 与 `hw_import_project` 工具走**同一个** `AssemblyState.importProject`：
    *   界面切换项目和 agent 调工具必须落到同一处，否则迟早一个能切一个不能。
-   * ★ 只传 `projectId` 而不是整个图纸：**图纸的真相在 `KNOWN_PROJECTS` 里**。
+   * ★ 只传 `projectId` 而不是整个图纸：**图纸的真相在 `SAMPLE_PROJECTS` 里**。
    *   让客户端把图纸抄一份发过来，就等于开了"客户端能自造项目"的口子。
    */
   | { readonly kind: 'import_project'; readonly projectId: string }

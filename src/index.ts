@@ -28,6 +28,7 @@ import { HardwareEventBus } from './core/events.ts'
 import { DeviceRegistry } from './core/sim/device-registry.ts'
 import { SimEngine } from './core/sim/engine.ts'
 import { ModelStore } from './core/models/store.ts'
+import { ProjectStore } from './core/projects/store.ts'
 import { seedPackagedModels } from './core/models/seed.ts'
 import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
@@ -273,7 +274,8 @@ export function apply(ctx: AppContext, config: Config): void {
    * ★ 为什么需要"惰性"：`NetworkRegistry` 建得比路由晚。若路由直接引用它，
    *   拿到的是 TDZ 里的 `undefined`，一调用就抛 —— 而**抛在路由里 = 界面永远转圈**。
    */
-  let projectStatusProvider: (() => readonly ProjectStatus[]) | undefined
+  let projectStatusProvider: (() => Promise<readonly ProjectStatus[]>) | undefined
+
 
   const clock = new VirtualClock({
     step: config.step,
@@ -301,6 +303,17 @@ export function apply(ctx: AppContext, config: Config): void {
       ? configuredModelsDir
       : path.join(dshHome, 'dsh-hardware-sandbox', 'models')
   const models = new ModelStore({ root: modelsRoot })
+
+  /**
+   * **用户的项目存储** —— 默认是个空目录。
+   *
+   * ★ 与模型目录**分开**：模型是基础设施（可能几 MB、导入一次基本不动），
+   *   项目是小 JSON 且会被 agent 反复改。混在一起时，"清空模型"之类的操作
+   *   会**顺手把项目也删了**，而那时没人会想到。
+   */
+  const projectStore = new ProjectStore({
+    root: path.join(dshHome, 'dsh-hardware-sandbox', 'projects'),
+  })
   log(`用户模型目录：${modelsRoot}`)
 
   // ★★ 种子：把**随包发布的模型**补进用户目录
@@ -440,7 +453,7 @@ export function apply(ctx: AppContext, config: Config): void {
       //   而路由在这里就要交出去。直接写变量名会拿到 TDZ 里的 `undefined` ——
       //   那时 `projectStatuses` 一调用就抛，而**抛在路由里 = 界面永远转圈**。
       //   ⇒ 这里只交一个"等会儿再算"的闭包；真算的时候注册表一定已经在了。
-      projects: () => projectStatusProvider?.() ?? [],
+      projects: () => projectStatusProvider?.() ?? Promise.resolve([]),
       onError: (error) => {
         warn(`路由 handler 抛错：${String(error)}`)
       },
@@ -569,7 +582,10 @@ export function apply(ctx: AppContext, config: Config): void {
    */
   {
     // ★ 注册表就位 ⇒ 现在可以真算了
-    projectStatusProvider = () => projectStatuses(state, networkRegistry)
+    projectStatusProvider = async () => {
+      const { projects: profiles } = await projectStore.list()
+      return projectStatuses(state, networkRegistry, profiles)
+    }
 
     const networkRegistry = new NetworkRegistry({
       state,
@@ -596,7 +612,7 @@ export function apply(ctx: AppContext, config: Config): void {
         //   （器件 + 接线 + 联网绑定 + **连通判据**）
         //   ★ 放在同一个 try 里：它与联网工具共用 `networkRegistry`，
         //     注册失败要一起回滚，不能留下"一半装了"的状态。
-        for (const definition of createProjectTools({ registry: networkRegistry, state })) {
+        for (const definition of createProjectTools({ registry: networkRegistry, state, projects: projectStore })) {
           networkDisposers.push(toolRegistry.register(definition))
           registeredToolNames.push(definition.name)
         }

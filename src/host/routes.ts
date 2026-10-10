@@ -97,7 +97,7 @@ export interface RouteDeps {
    *   路由层不必知道 `NetworkRegistry` 的存在，也不必知道"连通"怎么算 ——
    *   它只负责把这份数据发给前端。判据一变，这里一行都不用改。
    */
-  readonly projects?: () => readonly ProjectStatus[]
+  readonly projects?: () => Promise<readonly ProjectStatus[]>
 }
 
 /** POST body 上限，防止超大请求打爆内存。 */
@@ -251,8 +251,9 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
           {
             kind: 'exact' as const,
             path: HTTP_ROUTES.projects,
-            handler: (_req: unknown, res: ServerResponse) => {
-              sendJson(res, 200, deps.projects?.() ?? [])
+            handler: async (_req: unknown, res: ServerResponse) => {
+              // ★ 项目现在是**用户目录里的文件** ⇒ 每次现读（会变），不能缓存
+              sendJson(res, 200, (await deps.projects?.()) ?? [])
             },
           },
         ]),

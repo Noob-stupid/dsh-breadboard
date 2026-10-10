@@ -25,7 +25,7 @@ import type {
 } from '../../contracts/assembly.ts'
 import type { DeviceSnapshot, Protocol } from '../../contracts/device.ts'
 import type { NetworkBinding } from '../../contracts/network.ts'
-import { KNOWN_PROJECTS, type ProjectProfile } from '../../contracts/projects.ts'
+import { SAMPLE_PROJECTS, type ProjectProfile } from '../../contracts/projects.ts'
 import type { ActionResult, ClientAction } from '../../contracts/protocol.ts'
 // 模型库是**共享契约**（宿主半与前端场景半都要读），所以位于 contracts/ 而非 core/
 import { findModel, instantiate } from '../../contracts/library.ts'
@@ -343,7 +343,7 @@ export class AssemblyState {
       case 'set_rotation':
         return this.#toActionResult(this.setRotation(action.componentId, action.rotation))
       case 'import_project': {
-        const project = KNOWN_PROJECTS[action.projectId]
+        const project = SAMPLE_PROJECTS[action.projectId]
         if (project === undefined) return { ok: false, reason: 'unknown_hardware_model' }
         return this.#toActionResult(this.importProject(project))
       }

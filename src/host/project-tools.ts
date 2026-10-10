@@ -27,7 +27,7 @@
  */
 
 import {
-  KNOWN_PROJECTS,
+  SAMPLE_PROJECTS,
   type ProjectProfile,
   type ProjectStatus,
 } from '../contracts/projects.ts'
@@ -35,10 +35,19 @@ import type { NetworkDeviceSnapshot } from '../contracts/network.ts'
 import { text, type HardwareToolDefinition } from './tools.ts'
 import type { NetworkRegistry } from '../core/sim/network-registry.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
+import type { ProjectStore } from '../core/projects/store.ts'
 
 export interface ProjectToolDeps {
   readonly state: AssemblyState
   readonly registry: NetworkRegistry
+  /**
+   * 用户的**项目存储**。
+   *
+   * ★ 项目是**用户自己的**（默认空），不是内置常量 —— 见 core/projects/store.ts。
+   *   这里注入而不是 import 一个全局单例：测试能塞一个临时目录进去，
+   *   不会碰用户真实的项目。
+   */
+  readonly projects: ProjectStore
 }
 
 /** 链接判据的**原始事实**（`ProjectProfile.link.requires` 从这里面挑）。 */
@@ -99,13 +108,17 @@ const LINK_LABEL: Readonly<Record<keyof LinkFacts, string>> = {
  *
  * ★ 抽出来是为了**不出现第二本账**：界面看到的"连通"和 agent 看到的"连通"
  *   必须来自同一个函数。各算各的，迟早会一个说通、一个说没通，而没人知道信谁。
+ *
+ * ★ 项目清单**由调用方传进来**（来自 `ProjectStore`），不再读 `SAMPLE_PROJECTS` ——
+ *   项目是**用户的**，不是内置的。见 `core/projects/store.ts` 的说明。
  */
 export function projectStatuses(
   state: AssemblyState,
   registry: NetworkRegistry,
+  profiles: readonly ProjectProfile[],
 ): readonly ProjectStatus[] {
   const components = state.snapshot().components
-  return Object.values(KNOWN_PROJECTS).map((project) => {
+  return profiles.map((project) => {
     // ★ "已导入" = **图纸上那几个器件 id 都在**，而不是"场景里有任意器件"
     const imported = project.parts.every((part) => components.some((c) => c.id === part.id))
     const snapshot = registry.deviceFor(project.networkComponentId)?.snapshot()
@@ -123,7 +136,7 @@ export function projectStatuses(
 }
 
 export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinition[] {
-  const { state, registry } = deps
+  const { state, registry, projects } = deps
 
   /** 导入一个项目：按图纸放器件、连线、挂联网绑定。 */
   const importProject = (project: ProjectProfile): { ok: boolean; reason?: string; placed: string[] } => {
@@ -209,7 +222,10 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
       },
       // ★ 与 HTTP 路由**共用同一个函数** —— 界面看到的"连通"和 agent 看到的
       //   必须来自同一份计算，各算各的迟早会一个说通一个说没通，而没人知道信谁。
-      execute: async () => ({ projects: projectStatuses(state, registry) }),
+      execute: async () => {
+        const { projects: profiles, broken } = await projects.list()
+        return { projects: projectStatuses(state, registry, profiles), broken }
+      },
     },
 
     {
@@ -263,7 +279,7 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
       execute: async (args) => {
         const input = args as Record<string, unknown>
         const projectId = typeof input.projectId === 'string' ? input.projectId : ''
-        const project = KNOWN_PROJECTS[projectId]
+        const project = await projects.get(projectId)
         if (project === undefined) {
           return {
             ok: false,
@@ -272,7 +288,7 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
             wires: 0,
             linkUp: false,
             missing: [],
-            reason: `没有这个项目："${projectId}"。可用：${Object.keys(KNOWN_PROJECTS).join(', ')}`,
+            reason: `没有这个项目："${projectId}"。可用：${Object.keys(SAMPLE_PROJECTS).join(', ')}`,
           }
         }
         const result = importProject(project)
