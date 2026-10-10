@@ -91,13 +91,23 @@ export interface RouteDeps {
   /** handler 抛错时的上报口（默认静默）。 */
   readonly onError?: (error: unknown) => void
   /**
-   * **内置项目及其当前状态**（省略则项目路由不注册）。
+   * **项目**：状态查询 + 导入样例 + 删除（省略则项目路由不注册）。
    *
-   * ★ 传**函数**而不是注册表本身（与 `capabilities` 同一手法）：
-   *   路由层不必知道 `NetworkRegistry` 的存在，也不必知道"连通"怎么算 ——
-   *   它只负责把这份数据发给前端。判据一变，这里一行都不用改。
+   * ★ 传**一组函数**而不是注册表本身（与 `capabilities` 同一手法）：
+   *   路由层不必知道 `ProjectStore` 的存在，也不必知道"连通"怎么算 ——
+   *   它只负责把数据发给前端、把用户的操作转下去。判据一变，这里一行都不用改。
+   *
+   * ★ 为什么"导入样例"和"删除"走 HTTP 而**不是** ClientAction：
+   *   action 那条路的语义是"**改装配**"（放器件、连线、钉住），进的是 SSOT；
+   *   而项目的增删是"**改用户目录里的文件**"，与装配状态无关。
+   *   塞进 action 会让 `AssemblyState` 平白多出一个它管不着的东西。
    */
-  readonly projects?: () => Promise<readonly ProjectStatus[]>
+  readonly projects?: {
+    readonly list: () => Promise<readonly ProjectStatus[]>
+    /** 把随包样例装进用户目录。**只有用户显式导入时才调**（默认列表是空的）。 */
+    readonly importSample: (projectId: string) => Promise<boolean>
+    readonly remove: (projectId: string) => Promise<boolean>
+  }
 }
 
 /** POST body 上限，防止超大请求打爆内存。 */
@@ -243,17 +253,51 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
         sendJson(res, 200, state.snapshot())
       },
     },
-    // ★ 项目状态（省略 deps.projects 时不注册 —— 前端据此隐藏项目面板，
-    //   而不是给一个永远转圈的面板）
+    // ★ 项目：GET 列表 / POST 导入样例或删除
+    //   （省略 deps.projects 时不注册 —— 前端据此隐藏项目面板，
+    //    而不是给一个永远转圈的面板）
     ...(deps.projects === undefined
       ? []
       : [
           {
             kind: 'exact' as const,
             path: HTTP_ROUTES.projects,
-            handler: async (_req: unknown, res: ServerResponse) => {
-              // ★ 项目现在是**用户目录里的文件** ⇒ 每次现读（会变），不能缓存
-              sendJson(res, 200, (await deps.projects?.()) ?? [])
+            handler: async (req: IncomingMessage, res: ServerResponse) => {
+              const projects = deps.projects
+              if (projects === undefined) return
+              if (req.method === 'GET') {
+                // ★ 项目现在是**用户目录里的文件** ⇒ 每次现读（会变），不能缓存
+                sendJson(res, 200, await projects.list())
+                return
+              }
+              if (req.method !== 'POST') {
+                sendJson(res, 405, { ok: false, reason: 'method_not_allowed' })
+                return
+              }
+              const body = asRecord(await readJsonBody(req))
+              const op = typeof body.op === 'string' ? body.op : ''
+              const projectId = typeof body.projectId === 'string' ? body.projectId : ''
+              if (projectId === '') {
+                sendJson(res, 400, { ok: false, reason: '缺少 projectId' })
+                return
+              }
+              if (op === 'import-sample') {
+                const done = await projects.importSample(projectId)
+                sendJson(res, done ? 200 : 404, {
+                  ok: done,
+                  ...(done ? {} : { reason: `没有这个样例："${projectId}"` }),
+                })
+                return
+              }
+              if (op === 'delete') {
+                const done = await projects.remove(projectId)
+                sendJson(res, done ? 200 : 404, {
+                  ok: done,
+                  ...(done ? {} : { reason: `没有这个项目："${projectId}"` }),
+                })
+                return
+              }
+              sendJson(res, 400, { ok: false, reason: `不认识的 op："${op}"（可用 import-sample / delete）` })
             },
           },
         ]),

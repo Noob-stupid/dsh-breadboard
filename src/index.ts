@@ -453,7 +453,14 @@ export function apply(ctx: AppContext, config: Config): void {
       //   而路由在这里就要交出去。直接写变量名会拿到 TDZ 里的 `undefined` ——
       //   那时 `projectStatuses` 一调用就抛，而**抛在路由里 = 界面永远转圈**。
       //   ⇒ 这里只交一个"等会儿再算"的闭包；真算的时候注册表一定已经在了。
-      projects: () => projectStatusProvider?.() ?? Promise.resolve([]),
+      projects: {
+        list: () => projectStatusProvider?.() ?? Promise.resolve([]),
+        // ★ 只有**用户显式点导入**时才把样例落盘 —— 启动时不写。
+        //   启动就写等于又变成"内置项目"，而用户要的是"**别人是空的**"。
+        importSample: async (projectId: string) =>
+          (await projectStore.importSample(projectId)) !== undefined,
+        remove: (projectId: string) => projectStore.remove(projectId),
+      },
       onError: (error) => {
         warn(`路由 handler 抛错：${String(error)}`)
       },
