@@ -33,6 +33,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { SAMPLE_PROJECTS, type ProjectProfile } from '../../contracts/projects.ts'
+import type { NetworkBinding } from '../../contracts/network.ts'
 
 /** 存储错误的原因码。**给人看的原因**由调用方拼，这里只给机器可判定的。 */
 export type ProjectStoreErrorCode = 'bad_id' | 'not_found' | 'io' | 'bad_json' | 'bad_shape'
@@ -152,6 +153,61 @@ export function validateProjectProfile(
     }
   }
   return { ok: true, profile: box as unknown as ProjectProfile }
+}
+
+/**
+ * **把当前装配抓成一份项目图纸** —— "保存现有建模"的核心。
+ *
+ * ★★ 用户原话：「关键是在**哪把现有建模导出保存**」
+ *
+ *   在此之前只能**导入**图纸，**导不出去** —— 用户在场景里摆好、连好之后，
+ *   没有任何办法把它存下来。**这等于"能看不能存"**，而"存"才是他真正要的。
+ *
+ * ★ 抓的是**当前场景**，不是项目文件里那份：
+ *   用户可能刚挪了器件、加了根线、换了个朝向 —— 那些**都在装配状态里**。
+ *   从文件里读等于把用户刚才做的事**全部丢掉**。
+ *
+ * ⚠️ `label` / `description` / `link` 这些**图纸元信息不在装配里**，
+ *   所以从 `base`（项目原有的定义）继承；只覆盖**几何与连接**那几项。
+ */
+export function captureProject(
+  base: ProjectProfile,
+  snapshot: {
+    readonly components: readonly {
+      readonly id: string
+      readonly hardwareModel: string
+      readonly position: { readonly x: number; readonly y: number; readonly z: number }
+      readonly rotation: { readonly x: number; readonly y: number; readonly z: number }
+      readonly network?: NetworkBinding
+    }[]
+    readonly connections: readonly {
+      readonly from: { readonly componentId: string; readonly portId: string }
+      readonly to: { readonly componentId: string; readonly portId: string }
+    }[]
+  },
+): ProjectProfile {
+  const parts = snapshot.components.map((component) => ({
+    id: component.id,
+    hardwareModel: component.hardwareModel,
+    position: { ...component.position },
+    rotation: { ...component.rotation },
+  }))
+  const wires = snapshot.connections.map((cable) => ({
+    from: { componentId: cable.from.componentId, portId: cable.from.portId },
+    to: { componentId: cable.to.componentId, portId: cable.to.portId },
+  }))
+  // ★ 出网那台：优先用**当前装配里真的挂了 network 绑定的那个** ——
+  //   用户可能在场景里改了绑定，那比图纸里写的更可信。
+  const bound = snapshot.components.find((component) => component.network !== undefined)
+  const networkComponentId = bound?.id ?? base.networkComponentId
+  const network = bound?.network ?? base.network
+  return {
+    ...base,
+    parts,
+    wires,
+    networkComponentId,
+    network,
+  }
 }
 
 export class ProjectStore {

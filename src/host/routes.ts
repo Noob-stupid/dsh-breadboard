@@ -117,6 +117,15 @@ export interface RouteDeps {
      * id 非法、根本不是 JSON —— 每一种都要说清是哪种。
      */
     readonly save: (profile: unknown) => Promise<string | undefined>
+    /**
+     * **把当前场景存回这个项目**（"保存现有建模"）。
+     *
+     * ★ 与 `save` 分开：那个存的是**用户给的一份图纸**（文件里的），
+     *   这个存的是**眼前这套装配**（用户刚摆的、刚连的）。
+     *   来源完全不同，合成一个就得在实现里判"到底用哪个"，
+     *   而判错的表现是「**保存成功，但存的是旧的那份**」—— 用户以为白干了。
+     */
+    readonly saveScene: (projectId: string) => Promise<string | undefined>
     readonly remove: (projectId: string) => Promise<boolean>
   }
 }
@@ -304,6 +313,15 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               if (op === 'save') {
                 // ★ 整份图纸在 `profile` 里（用户从文件选的，或 agent 给的）
                 const reason = await projects.save(body.profile)
+                sendJson(res, reason === undefined ? 200 : 400, {
+                  ok: reason === undefined,
+                  ...(reason === undefined ? {} : { reason }),
+                })
+                return
+              }
+              if (op === 'save-scene') {
+                // ★ **把眼前这套装配存回项目** —— 用户："关键是在哪把现有建模导出保存"
+                const reason = await projects.saveScene(projectId)
                 sendJson(res, reason === undefined ? 200 : 400, {
                   ok: reason === undefined,
                   ...(reason === undefined ? {} : { reason }),

@@ -41,7 +41,7 @@ export interface ProjectPanelProps {
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
 async function callProjects(
-  op: 'import-sample' | 'delete' | 'save',
+  op: 'import-sample' | 'delete' | 'save' | 'save-scene',
   projectId: string,
   profile?: unknown,
 ): Promise<string | undefined> {
@@ -66,7 +66,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
   const [nonce, setNonce] = useState(0)
   const [busy, setBusy] = useState<string | undefined>(undefined)
 
-  const run = (op: 'import-sample' | 'delete', projectId: string): void => {
+  const run = (op: 'import-sample' | 'delete' | 'save-scene', projectId: string): void => {
     setBusy(`${op}:${projectId}`)
     void callProjects(op, projectId).then((error) => {
       setBusy(undefined)
@@ -191,6 +191,35 @@ export function ProjectPanel(props: ProjectPanelProps) {
             },
           },
           busy === `delete:${project.id}` ? '删除中…' : '删除此项目',
+        ),
+        // ★★ **保存当前装配** —— 用户原话：「关键是在**哪把现有建模导出保存**」
+        //
+        //   在此之前只能**导入**图纸、**导不出去**：在场景里摆好连好之后，
+        //   没有任何办法把它存下来 —— **能看不能存**。
+        //   这个按钮把**眼前这套装配**（器件位置/朝向/接线/绑定）写回项目文件。
+        //
+        // ★ 存的是**当前场景**，不是文件里那份：用户可能刚挪了器件、加了线，
+        //   从文件读等于把他刚做的事全丢掉。
+        h(
+          'button',
+          {
+            type: 'button',
+            disabled: props.disabled || busy !== undefined,
+            onClick: () => run('save-scene', project.id),
+            title:
+              '把**当前场景里这套装配**（器件位置、朝向、接线、联网绑定）存回这个项目。\n' +
+              '存完可以点「导出（另存为…）」拿走文件。',
+            style: {
+              padding: '5px 8px',
+              borderRadius: '6px',
+              border: '1px solid rgba(120, 170, 130, 0.45)',
+              background: 'rgba(38, 70, 50, 0.85)',
+              color: 'inherit',
+              font: 'inherit',
+              cursor: props.disabled ? 'not-allowed' : 'pointer',
+            },
+          },
+          busy === `save-scene:${project.id}` ? '保存中…' : '保存当前装配到此项目',
         ),
         // ★★ **导出（另存为…）** —— 用户原话：「这个也能**选择路径保存**」
         //

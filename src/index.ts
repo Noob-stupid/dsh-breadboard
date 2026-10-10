@@ -28,7 +28,7 @@ import { HardwareEventBus } from './core/events.ts'
 import { DeviceRegistry } from './core/sim/device-registry.ts'
 import { SimEngine } from './core/sim/engine.ts'
 import { ModelStore } from './core/models/store.ts'
-import { ProjectStore, validateProjectProfile } from './core/projects/store.ts'
+import { ProjectStore, captureProject, validateProjectProfile } from './core/projects/store.ts'
 import { seedPackagedModels } from './core/models/seed.ts'
 import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
@@ -467,6 +467,19 @@ export function apply(ctx: AppContext, config: Config): void {
           if (!checked.ok) return checked.reason
           try {
             await projectStore.save(checked.profile)
+            return undefined
+          } catch (error) {
+            return String(error)
+          }
+        },
+        // ★ **把当前场景存回项目** —— 用户："关键是在哪把现有建模导出保存"
+        //   从**装配状态**抓，不从项目文件读：用户可能刚挪了器件、加了线，
+        //   从文件读等于把他刚做的事全丢掉。
+        saveScene: async (projectId: string) => {
+          const base = await projectStore.get(projectId)
+          if (base === undefined) return `没有这个项目：${projectId}`
+          try {
+            await projectStore.save(captureProject(base, state.snapshot()))
             return undefined
           } catch (error) {
             return String(error)
