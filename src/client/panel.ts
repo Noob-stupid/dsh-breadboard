@@ -34,6 +34,7 @@ import {
   NoticeBar,
   type ContextMenuItem,
 } from './hud.ts'
+import { ProjectPanel } from './project-panel.ts'
 import { sendToCurrentSession } from './session-chat.ts'
 import type { SessionsFace } from './slots.ts'
 
@@ -382,6 +383,12 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           width: '220px',
         },
       },
+      createElement(ProjectPanel, {
+        onSwitch: (projectId) =>
+          void channelRef.current?.dispatch({ kind: 'import_project', projectId }),
+        disabled: !ready,
+        revision: channelRef.current?.latest()?.revision ?? 0,
+      }),
       createElement(HardwarePalette, { onPick: handlePick, disabled: !ready }),
       createElement(ImportControls, {
         records,

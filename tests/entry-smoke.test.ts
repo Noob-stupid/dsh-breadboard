@@ -138,6 +138,9 @@ test('★ 提供 webServer 时注册 HTTP 与 WS 路由', () => {
       HTTP_ROUTES.action,
       HTTP_ROUTES.assembly,
       HTTP_ROUTES.capabilities,
+      // ★ 项目状态（界面要显示"智座连通了没有"）——
+      //   "通"的判据只有宿主算得出来（快照里没有 `config`），所以必须走路由。
+      HTTP_ROUTES.projects,
       // ★ 模型路由注册**两条**，路径串相同：exact（列表）+ prefix（单项）。
       //   精确表先于前缀表匹配，所以 `<base>` 本身仍走列表。
       MODEL_ROUTES.base,

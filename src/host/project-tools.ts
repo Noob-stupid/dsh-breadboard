@@ -29,6 +29,7 @@
 import {
   KNOWN_PROJECTS,
   type ProjectProfile,
+  type ProjectStatus,
 } from '../contracts/projects.ts'
 import type { NetworkDeviceSnapshot } from '../contracts/network.ts'
 import { text, type HardwareToolDefinition } from './tools.ts'
@@ -91,6 +92,34 @@ const LINK_LABEL: Readonly<Record<keyof LinkFacts, string>> = {
   config: '拉到过配置（知道多久报一次）',
   reported: '成功上报过至少一次',
   reporting: '最近一次上报是成功的',
+}
+
+/**
+ * **算一遍所有项目的当前状态** —— 工具与 HTTP 路由**共用这一份**。
+ *
+ * ★ 抽出来是为了**不出现第二本账**：界面看到的"连通"和 agent 看到的"连通"
+ *   必须来自同一个函数。各算各的，迟早会一个说通、一个说没通，而没人知道信谁。
+ */
+export function projectStatuses(
+  state: AssemblyState,
+  registry: NetworkRegistry,
+): readonly ProjectStatus[] {
+  const components = state.snapshot().components
+  return Object.values(KNOWN_PROJECTS).map((project) => {
+    // ★ "已导入" = **图纸上那几个器件 id 都在**，而不是"场景里有任意器件"
+    const imported = project.parts.every((part) => components.some((c) => c.id === part.id))
+    const snapshot = registry.deviceFor(project.networkComponentId)?.snapshot()
+    const link = linkStateOf(project, snapshot)
+    return {
+      id: project.id,
+      label: project.label,
+      description: project.description,
+      imported,
+      linkUp: imported && link.up,
+      missing: link.missing,
+      requirements: LINK_LABEL,
+    }
+  })
 }
 
 export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinition[] {
@@ -178,24 +207,9 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
           return text(lines.join('\n') || '（没有内置项目）')
         },
       },
-      execute: async () => {
-        const components = state.snapshot().components
-        const projects = Object.values(KNOWN_PROJECTS).map((project) => {
-          // ★ "已导入" = **图纸上那几个器件 id 都在**，而不是"有任意器件"
-          const imported = project.parts.every((part) => components.some((c) => c.id === part.id))
-          const snapshot = registry.deviceFor(project.networkComponentId)?.snapshot()
-          const link = linkStateOf(project, snapshot)
-          return {
-            id: project.id,
-            label: project.label,
-            description: project.description,
-            imported,
-            linkUp: imported && link.up,
-            missing: link.missing,
-          }
-        })
-        return { projects }
-      },
+      // ★ 与 HTTP 路由**共用同一个函数** —— 界面看到的"连通"和 agent 看到的
+      //   必须来自同一份计算，各算各的迟早会一个说通一个说没通，而没人知道信谁。
+      execute: async () => ({ projects: projectStatuses(state, registry) }),
     },
 
     {

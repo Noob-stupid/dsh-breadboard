@@ -158,3 +158,23 @@ export const KNOWN_PROJECTS: Readonly<Record<string, ProjectProfile>> = {
 export function projectIds(): readonly string[] {
   return Object.keys(KNOWN_PROJECTS)
 }
+
+/**
+ * 一个项目**当前**的状态 —— 给界面与工具用（运行态，不是图纸）。
+ *
+ * ★ 与 {@link ProjectProfile} 分开是有意的：那个是**装配图纸**（不会变），
+ *   这个是**现场读数**（一直在变）。混在一起，一次 resync 就分不清哪个是真相。
+ */
+export interface ProjectStatus {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  /** 图纸上那几个器件**都在场景里**。 */
+  readonly imported: boolean
+  /** 软硬件连通（判据见 {@link ProjectLinkCheck}）。 */
+  readonly linkUp: boolean
+  /** 还没满足的判据（**要给人看** —— "没通"必须说清差什么）。 */
+  readonly missing: readonly string[]
+  /** 人类可读的判据说明，键是判据名。 */
+  readonly requirements: Readonly<Record<string, string>>
+}

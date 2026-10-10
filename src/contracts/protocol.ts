@@ -27,6 +27,16 @@ export const HTTP_ROUTES = {
   action: `${ROUTE_PREFIX}/api/action`,
   /** GET  → 插件与宿主能力自检（§10.1 HostCapabilities）。 */
   capabilities: `${ROUTE_PREFIX}/api/capabilities`,
+  /**
+   * GET → **内置软硬件项目及其当前状态**（`ProjectStatus[]`）。
+   *
+   * ★ 存在的理由：界面要显示"**智座项目连通了没有**"，而"通"的判据
+   *   （注册过 / 拉到过配置 / 上报过 / 最近一次也成功）**只有宿主算得出来** ——
+   *   快照里虽然有设备状态，但**没有 `config`**，前端算不全。
+   *   ⇒ 与其让前端近似，不如宿主把算好的结果给它。
+   *   ★ 与 `hw_list_projects` 工具**共用同一个函数**，两边不会说不一致的话。
+   */
+  projects: `${ROUTE_PREFIX}/api/projects`,
 } as const
 
 /** WebSocket 升级路由（`ctx.webServer.registerUpgrade`）。前端订阅事件流。 */
@@ -378,6 +388,15 @@ export type ClientAction =
    *   而且没人能发现。显式值让重放与重试都是幂等的。
    */
   | { readonly kind: 'set_rotation'; readonly componentId: string; readonly rotation: Vec3 }
+  /**
+   * **切换到某个软硬件项目** —— 按它的图纸清场、放器件、连线、挂联网绑定。
+   *
+   * ★ 与 `hw_import_project` 工具走**同一个** `AssemblyState.importProject`：
+   *   界面切换项目和 agent 调工具必须落到同一处，否则迟早一个能切一个不能。
+   * ★ 只传 `projectId` 而不是整个图纸：**图纸的真相在 `KNOWN_PROJECTS` 里**。
+   *   让客户端把图纸抄一份发过来，就等于开了"客户端能自造项目"的口子。
+   */
+  | { readonly kind: 'import_project'; readonly projectId: string }
   | { readonly kind: 'connect'; readonly from: { componentId: string; portId: string }; readonly to: { componentId: string; portId: string } }
   | { readonly kind: 'disconnect'; readonly cableId: string }
 

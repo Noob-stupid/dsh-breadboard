@@ -25,6 +25,7 @@ import type {
 } from '../../contracts/assembly.ts'
 import type { DeviceSnapshot, Protocol } from '../../contracts/device.ts'
 import type { NetworkBinding } from '../../contracts/network.ts'
+import { KNOWN_PROJECTS, type ProjectProfile } from '../../contracts/projects.ts'
 import type { ActionResult, ClientAction } from '../../contracts/protocol.ts'
 // 模型库是**共享契约**（宿主半与前端场景半都要读），所以位于 contracts/ 而非 core/
 import { findModel, instantiate } from '../../contracts/library.ts'
@@ -242,6 +243,41 @@ export class AssemblyState {
   }
 
   /**
+   * **导入一个软硬件项目**：按图纸清场、放器件、连线、挂联网绑定。
+   *
+   * ★ 先**清空**再摆：导入的语义是"**把现场布置成这张图纸**"，不是"往上加"。
+   *   不清空的话，同一个项目导两次会因为 id 撞车而失败，症状是
+   *   「第一次好好的，再点一次就报错」—— 很难懂。
+   *
+   * ★ 放在 SSOT 而不是工具里：**界面切换项目和 agent 调工具必须是同一条路**。
+   *   各写一份，迟早一个能切一个不能，而没人知道差在哪。
+   *
+   * ⚠️ 中途失败**不回滚已经放下的器件**：如实返回失败原因。
+   *   回滚看着更干净，但会把"到底哪一步断的"抹掉 —— 而**这个项目现在是断的**，
+   *   用户必须知道（这正是本项目失败族里那条：可见的失败 > 静默的干净）。
+   */
+  importProject(project: ProjectProfile): StateResult<readonly string[]> {
+    const placed: string[] = []
+    for (const component of [...this.#components.values()]) this.remove(component.id)
+
+    for (const part of project.parts) {
+      const result = this.place(part.hardwareModel, part.position, part.id)
+      if (!result.ok) return fail<readonly string[]>('unknown_hardware_model')
+      if (part.rotation !== undefined) this.setRotation(part.id, part.rotation)
+      placed.push(part.id)
+    }
+
+    for (const wire of project.wires) {
+      const result = this.connect(wire.from, wire.to)
+      if (!result.ok) return fail<readonly string[]>(result.reason)
+    }
+
+    const bound = this.setNetwork(project.networkComponentId, project.network)
+    if (!bound.ok) return fail<readonly string[]>(bound.reason)
+    return ok(placed)
+  }
+
+  /**
    * **旋转一个组件**（欧拉角，弧度，绕**自身原点** = 几何包围盒中心）。
    *
    * ★★ 为什么"绕中心转"是这条链能不能用的关键 —— 契约里那条原点约定就是为它定的：
@@ -306,6 +342,11 @@ export class AssemblyState {
         return this.#toActionResult(this.setPinned(action.componentId, action.pinned))
       case 'set_rotation':
         return this.#toActionResult(this.setRotation(action.componentId, action.rotation))
+      case 'import_project': {
+        const project = KNOWN_PROJECTS[action.projectId]
+        if (project === undefined) return { ok: false, reason: 'unknown_hardware_model' }
+        return this.#toActionResult(this.importProject(project))
+      }
       case 'connect':
         return this.#toActionResult(this.connect(action.from, action.to))
       case 'disconnect':

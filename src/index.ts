@@ -33,7 +33,8 @@ import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
-import { createProjectTools } from './host/project-tools.ts'
+import { createProjectTools, projectStatuses } from './host/project-tools.ts'
+import type { ProjectStatus } from './contracts/projects.ts'
 import { createFetchTransport } from './host/fetch-transport.ts'
 import { createChatSender, type AgentsLike } from './host/chat.ts'
 import { DEFAULT_NETWORK_ADAPTERS, NetworkRegistry } from './core/sim/network-registry.ts'
@@ -264,6 +265,16 @@ export function apply(ctx: AppContext, config: Config): void {
     ctx.logger?.warn?.(`[dsh-hardware-sandbox] ${message}`)
   }
 
+  /**
+   * **项目状态的惰性 provider** —— 声明在**函数顶层**，因为它要跨两个块用：
+   * 路由块（约 L420）要把它交出去，联网设备块（约 L563）才能把它接上。
+   * 声明在那两个块里面任一个，另一边就看不见（**作用域不是缩进，是块**）。
+   *
+   * ★ 为什么需要"惰性"：`NetworkRegistry` 建得比路由晚。若路由直接引用它，
+   *   拿到的是 TDZ 里的 `undefined`，一调用就抛 —— 而**抛在路由里 = 界面永远转圈**。
+   */
+  let projectStatusProvider: (() => readonly ProjectStatus[]) | undefined
+
   const clock = new VirtualClock({
     step: config.step,
     yieldBudgetMs: config.yieldBudgetMs,
@@ -423,6 +434,13 @@ export function apply(ctx: AppContext, config: Config): void {
       stepParts,
       ...(searcher !== undefined ? { search: searcher } : {}),
       ...(chatSender !== undefined ? { chat: chatSender } : {}),
+      // ★ 项目状态给界面用（"智座连通了没有"）。与 hw_list_projects **同一个函数**。
+      //
+      // ⚠️ 用**惰性 provider**：`NetworkRegistry` 在下面才建（约 L557），
+      //   而路由在这里就要交出去。直接写变量名会拿到 TDZ 里的 `undefined` ——
+      //   那时 `projectStatuses` 一调用就抛，而**抛在路由里 = 界面永远转圈**。
+      //   ⇒ 这里只交一个"等会儿再算"的闭包；真算的时候注册表一定已经在了。
+      projects: () => projectStatusProvider?.() ?? [],
       onError: (error) => {
         warn(`路由 handler 抛错：${String(error)}`)
       },
@@ -550,6 +568,9 @@ export function apply(ctx: AppContext, config: Config): void {
    *   而这两件事毫无关系。
    */
   {
+    // ★ 注册表就位 ⇒ 现在可以真算了
+    projectStatusProvider = () => projectStatuses(state, networkRegistry)
+
     const networkRegistry = new NetworkRegistry({
       state,
       transport: createFetchTransport({ timeoutMs: 10_000 }),

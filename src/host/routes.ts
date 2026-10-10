@@ -16,6 +16,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket } from 'ws'
 
+import type { ProjectStatus } from '../contracts/projects.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import type { HardwareEventBus } from '../core/events.ts'
 import type { ModelStore } from '../core/models/store.ts'
@@ -89,6 +90,14 @@ export interface RouteDeps {
   readonly chat?: (request: ChatSendRequest) => ChatSendResult
   /** handler 抛错时的上报口（默认静默）。 */
   readonly onError?: (error: unknown) => void
+  /**
+   * **内置项目及其当前状态**（省略则项目路由不注册）。
+   *
+   * ★ 传**函数**而不是注册表本身（与 `capabilities` 同一手法）：
+   *   路由层不必知道 `NetworkRegistry` 的存在，也不必知道"连通"怎么算 ——
+   *   它只负责把这份数据发给前端。判据一变，这里一行都不用改。
+   */
+  readonly projects?: () => readonly ProjectStatus[]
 }
 
 /** POST body 上限，防止超大请求打爆内存。 */
@@ -190,6 +199,11 @@ function eventsForAction(action: ClientAction, state: AssemblyState, at: number)
     case 'set_rotation':
       // 旋转同理：不改变拓扑，只是组件的一个属性。
       return [{ ...base, type: 'hardware/state_changed', revision: snapshot.revision }]
+    case 'import_project':
+      // 切换项目是**大改**（清场 + 重建 + 重新绑定）⇒ 让场景**整份重来**。
+      // 走 diff 的话旧器件会被逐条删除、新器件逐条新增，中间态里线和端口对不上，
+      // 看起来像闪烁 —— 而"闪一下"和"真的错了"在界面上分不出来。
+      return [{ ...base, type: 'hardware/state_changed', revision: snapshot.revision }]
     case 'connect': {
       const made = snapshot.connections.findLast(
         (connection) =>
@@ -229,6 +243,19 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
         sendJson(res, 200, state.snapshot())
       },
     },
+    // ★ 项目状态（省略 deps.projects 时不注册 —— 前端据此隐藏项目面板，
+    //   而不是给一个永远转圈的面板）
+    ...(deps.projects === undefined
+      ? []
+      : [
+          {
+            kind: 'exact' as const,
+            path: HTTP_ROUTES.projects,
+            handler: (_req: unknown, res: ServerResponse) => {
+              sendJson(res, 200, deps.projects?.() ?? [])
+            },
+          },
+        ]),
     {
       kind: 'exact',
       path: HTTP_ROUTES.action,
