@@ -108,33 +108,64 @@ export function HardwarePalette(props: HardwarePaletteProps) {
   return createElement(
     Panel,
     { title: '① 添加器件', subtitle: '点一下放进场景（② 是给它们换真实模型）' },
-    ...models.map((model) =>
-      createElement(
-        'button',
-        {
-          key: model.key,
-          type: 'button',
-          disabled: props.disabled,
-          onClick: () => props.onPick(model.key),
-          title:
-            `${model.label}\n` +
-            `尺寸 ${mm(model.size.x)} × ${mm(model.size.z)} × ${mm(model.size.y)} mm\n` +
-            `${model.ports.length} 个端口`,
-          style: {
-            textAlign: 'left',
-            padding: '6px 8px',
-            borderRadius: '6px',
-            border: '1px solid rgba(120, 140, 170, 0.3)',
-            background: props.disabled ? 'rgba(60,70,85,0.5)' : 'rgba(40, 50, 66, 0.9)',
-            color: 'inherit',
-            font: 'inherit',
-            cursor: props.disabled ? 'not-allowed' : 'pointer',
+    // ★★ 器件列表要**自己能滚**（2026-10-10 加）
+    //
+    //   原来这些按钮是**直接铺在 Panel 里**的 —— 型号只有 7 个时看不出来，
+    //   一旦面板变高（或窗口变矮），列表就**顶穿面板、下面的内容被挤出屏幕**。
+    //   用户原话：「**这是不是多了列表应该有滚轮条**」—— 是的，应该有。
+    //
+    //   ★ 为什么不靠外层滚动：外层是 `pointer-events: none` 的 HUD 覆盖层
+    //     （见 SCENE 的交互设计），在它上面滚动等于**和场景拖拽抢事件**。
+    //     ⇒ 滚动必须收在**这一块列表自己**身上，滚轮才不会漏给场景。
+    createElement(
+      'div',
+      { style: PALETTE_LIST_STYLE },
+      ...models.map((model) =>
+        createElement(
+          'button',
+          {
+            key: model.key,
+            type: 'button',
+            disabled: props.disabled,
+            onClick: () => props.onPick(model.key),
+            title:
+              `${model.label}\n` +
+              `尺寸 ${mm(model.size.x)} × ${mm(model.size.z)} × ${mm(model.size.y)} mm\n` +
+              `${model.ports.length} 个端口`,
+            style: {
+              textAlign: 'left',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px solid rgba(120, 140, 170, 0.3)',
+              background: props.disabled ? 'rgba(60,70,85,0.5)' : 'rgba(40, 50, 66, 0.9)',
+              color: 'inherit',
+              font: 'inherit',
+              cursor: props.disabled ? 'not-allowed' : 'pointer',
+            },
           },
-        },
-        model.label,
+          model.label,
+        ),
       ),
     ),
   )
+}
+
+/**
+ * 器件列表的容器样式。
+ *
+ * ★ `overscrollBehavior: 'contain'` 不是装饰：没有它，滚到列表尽头时
+ *   **滚轮会"穿透"到场景**，把 3D 视角一起缩放了 —— 用户以为滚的是列表，
+ *   实际动的是镜头，这种"两件事一起发生"最难排查。
+ */
+const PALETTE_LIST_STYLE = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: '5px',
+  maxHeight: '260px',
+  overflowY: 'auto' as const,
+  overscrollBehavior: 'contain' as const,
+  // 给滚动条留一点位置，免得它压住按钮的圆角
+  paddingRight: '4px',
 }
 
 const BUTTON_STYLE = {
@@ -386,6 +417,8 @@ const RESULT_BOX_STYLE = {
   border: '1px solid rgba(120, 140, 170, 0.22)',
   maxHeight: '240px',
   overflowY: 'auto',
+  // ★ 同 ① 的列表：不让滚轮到尽头后**漏给场景**去缩放镜头
+  overscrollBehavior: 'contain',
 } as const
 
 /**

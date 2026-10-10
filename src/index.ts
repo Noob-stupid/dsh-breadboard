@@ -33,6 +33,7 @@ import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
+import { createProjectTools } from './host/project-tools.ts'
 import { createFetchTransport } from './host/fetch-transport.ts'
 import { createChatSender, type AgentsLike } from './host/chat.ts'
 import { DEFAULT_NETWORK_ADAPTERS, NetworkRegistry } from './core/sim/network-registry.ts'
@@ -569,6 +570,16 @@ export function apply(ctx: AppContext, config: Config): void {
           registeredToolNames.push(definition.name)
         }
         log(`已注册 ${String(networkDisposers.length)} 个联网设备工具`)
+
+        // ★★ 项目工具：一次导入一个**真实软硬件系统**
+        //   （器件 + 接线 + 联网绑定 + **连通判据**）
+        //   ★ 放在同一个 try 里：它与联网工具共用 `networkRegistry`，
+        //     注册失败要一起回滚，不能留下"一半装了"的状态。
+        for (const definition of createProjectTools({ registry: networkRegistry, state })) {
+          networkDisposers.push(toolRegistry.register(definition))
+          registeredToolNames.push(definition.name)
+        }
+        log('已注册项目导入工具（hw_list_projects / hw_import_project）')
       } catch (error) {
         warn(`联网设备工具注册失败（已回滚）：${String(error)}`)
         registeredToolNames.length = 0

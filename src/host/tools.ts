@@ -75,7 +75,7 @@ const FAULT_TYPES: readonly DeviceFaultType[] = [
   'clear',
 ]
 
-const text = (value: string): ContentBlockLike[] => [{ type: 'text', text: value }]
+export const text = (value: string): ContentBlockLike[] => [{ type: 'text', text: value }]
 
 /** 把值安全地转成对象（模型可能传 null / 非对象）。 */
 function asRecord(value: unknown): Record<string, unknown> {
