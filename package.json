@@ -2,14 +2,14 @@
   "name": "@dsh-breadboard/dsh-hardware-sandbox",
   "version": "0.0.1",
   "author": {
-    "name": "noob-stupid",
-    "url": "https://github.com/noob-stupid"
+    "name": "dsh-breadboard",
+    "url": "https://github.com/Noob-stupid/dsh-breadboard"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/noob-stupid/dsh-hardware-sandbox.git"
+    "url": "git+https://github.com/Noob-stupid/dsh-breadboard.git"
   },
-  "homepage": "https://github.com/noob-stupid/dsh-hardware-sandbox",
+  "homepage": "https://github.com/Noob-stupid/dsh-breadboard",
   "description": "DSH 嵌入式硬件沙盒：3D 装配协作感知 + 项目级硬件在环仿真",
   "private": true,
   "type": "module",
