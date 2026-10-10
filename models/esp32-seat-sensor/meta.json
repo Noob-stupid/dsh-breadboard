@@ -1,0 +1,8 @@
+{
+  "importedAt": "2026-10-10T07:36:04.652Z",
+  "modelKey": "esp32-seat-sensor",
+  "bytes": 47820,
+  "format": "glb",
+  "nodes": 1,
+  "generator": "tools/_gen_zhizuo_models.py"
+}

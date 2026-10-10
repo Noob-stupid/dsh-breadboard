@@ -28,7 +28,8 @@ from typing import Iterable
 
 import numpy as np
 
-OUT_DIR = r"C:\Users\花火\.dsh\dsh-hardware-sandbox\models"
+# ★★ 输出到**仓库里**（<repo>/models/），而不是用户目录 —— 见下方说明。
+OUT_DIR = str(__import__('pathlib').Path(__file__).resolve().parent.parent / 'models')
 
 
 # ── 几何基元（返回 顶点/法线/索引）─────────────────────────────────────────
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     import os
 
     print("生成智座硬件的 GLB（按真实尺寸）：")
-    for key, builder in (("esp32-devkit-v1", build_esp32_devkit), ("hc-sr501", build_hc_sr501)):
+    for key, builder in (("esp32-seat-sensor", build_esp32_devkit), ("hc-sr501", build_hc_sr501)):
         mesh = builder()
         target = os.path.join(OUT_DIR, key, "model.bin")
         os.makedirs(os.path.dirname(target), exist_ok=True)
