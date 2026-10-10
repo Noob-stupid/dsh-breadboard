@@ -388,6 +388,18 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           void channelRef.current?.dispatch({ kind: 'import_project', projectId }),
         disabled: !ready,
         revision: channelRef.current?.latest()?.revision ?? 0,
+        // ★ 建模导入复用 ② 的 handleImport —— 两条路各写一份，
+        //   迟早一个能存一个不能（而"能不能存"用户一眼就能看出来）
+        onImportModel: async (modelKey, file) => {
+          const registry = registryRef.current
+          if (!registry) return '模型库还没就绪'
+          const result = await registry.upload(modelKey, file)
+          setRecords([...registry.list()])
+          if (!result.ok) return result.reason ?? '未知原因'
+          providerRef.current?.invalidate(modelKey)
+          syncRef.current?.rebuildModel(modelKey)
+          return undefined
+        },
       }),
       createElement(HardwarePalette, {
         onPick: handlePick,

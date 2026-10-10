@@ -29,7 +29,11 @@ import { createElement as h } from 'react'
 
 import { HTTP_ROUTES } from '../contracts/protocol.ts'
 import type { ProjectStatus } from '../contracts/projects.ts'
+import { HARDWARE_MODELS } from '../contracts/library.ts'
 import { Panel } from './hud.ts'
+
+/** 模型库里的全部型号键 —— 建模导入时要选"给哪个型号换装"。 */
+const modelKeys: readonly string[] = Object.keys(HARDWARE_MODELS)
 
 export interface ProjectPanelProps {
   /** 切换到这个项目（走 `import_project` 动作，与工具同一条路）。 */
@@ -37,6 +41,15 @@ export interface ProjectPanelProps {
   readonly disabled: boolean
   /** 装配 revision —— 变了就重新拉一次状态（导入之后连通性会变）。 */
   readonly revision: number
+  /**
+   * **给某个型号导入 3D 几何**（.glb / .gltf）。
+   *
+   * ★ 与「导入项目」分开是用户明确要的（"要两个分开的按钮"）：
+   *   项目 = 接哪个软件系统；建模 = 某个型号长什么样。
+   *   两边都是文件，界面必须一眼分得开。
+   * 返回**人话原因**（`undefined` = 成功）。
+   */
+  readonly onImportModel: (modelKey: string, file: File) => Promise<string | undefined>
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -65,6 +78,8 @@ export function ProjectPanel(props: ProjectPanelProps) {
   /** 增删之后要让 `useEffect` 重跑 —— 项目文件在磁盘上变了。 */
   const [nonce, setNonce] = useState(0)
   const [busy, setBusy] = useState<string | undefined>(undefined)
+  /** 建模导入的目标型号（select 的当前值）。 */
+  const [targetKey, setTargetKey] = useState<string>(modelKeys[0] ?? '')
 
   const run = (op: 'import-sample' | 'delete' | 'save-scene', projectId: string): void => {
     setBusy(`${op}:${projectId}`)
@@ -277,15 +292,16 @@ export function ProjectPanel(props: ProjectPanelProps) {
     h(
       'div',
       {
-        key: '__import-file',
+        key: '__import-row',
         style: {
           display: 'flex',
           flexDirection: 'column',
-          gap: '5px',
+          gap: '6px',
           paddingTop: '4px',
           borderTop: '1px solid rgba(120, 140, 170, 0.18)',
         },
       },
+      // ── ① 导入**项目**（.json 项目定义）──
       h(
         'label',
         {
@@ -300,11 +316,10 @@ export function ProjectPanel(props: ProjectPanelProps) {
             cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
           },
           title:
-            '选一个项目定义文件（.json）。\n' +
-            '格式：{ "id": "...", "label": "...", "parts": [...], "wires": [...], ' +
-            '"networkComponentId": "...", "network": {...} }',
+            '导入一个**项目定义**（.json）：它描述这套硬件接哪个软件系统、有哪些器件、怎么接线。\n' +
+            '格式：{ "id", "label", "parts": [...], "wires": [...], "networkComponentId", "network", "link" }',
         },
-        busy === 'save:file' ? '导入中…' : '＋ 导入项目',
+        busy === 'save:file' ? '导入中…' : '＋ 导入项目（.json 项目定义）',
         h('input', {
           type: 'file',
           accept: '.json,application/json',
@@ -321,26 +336,87 @@ export function ProjectPanel(props: ProjectPanelProps) {
                 try {
                   parsed = JSON.parse(text)
                 } catch {
-                  // ★ 解析失败要说清是"这个文件不是 JSON"，而不是笼统的失败
                   setBusy(undefined)
                   setFailure(`导入失败：${file.name} 不是合法 JSON`)
                   return
                 }
-                // 兼容带 format 包装的文件：{ format: 1, profile: {...} }
                 const box = parsed as { profile?: unknown }
                 return callProjects('save', '', box.profile ?? parsed)
               })
               .then((error) => {
-                if (error === undefined) return
                 setBusy(undefined)
-                setFailure(`导入失败：${error}`)
-              })
-              .then(() => {
-                setBusy(undefined)
-                setNonce((n) => n + 1)
+                if (error !== undefined) setFailure(`导入失败：${error}`)
+                else setNonce((n) => n + 1)
               })
           },
         }),
+      ),
+      // ── ② 导入**建模**（.glb / .gltf）──
+      //
+      // ★★ 用户原话：「**要两个分开的按钮**」
+      //   原来只有一个「导入项目」，提示里还写着"选一个 .json 文件" ——
+      //   用户**分不清那是项目还是模型**（两边都是文件、都是 json）。
+      //   ⇒ 项目与建模是**两件不同的事**，界面必须一眼分得开。
+      //
+      // ★ 建模需要先选**给哪个型号**：模型库里每个型号是一个**固定的键**
+      //   （`hc-sr501` / `esp32-seat-sensor` …），几何是**挂在键上**的。
+      //   不选键就不知道该挂给谁 —— 而"随便找个键挂上"会让**别的型号悄悄变样**。
+      h(
+        'div',
+        { style: { display: 'flex', gap: '5px', alignItems: 'center' } },
+        h(
+          'select',
+          {
+            value: targetKey,
+            disabled: props.disabled || busy !== undefined,
+            onChange: (event: { target?: { value?: string } }) =>
+              setTargetKey(event.target?.value ?? ''),
+            style: {
+              flex: '1',
+              minWidth: '0',
+              padding: '4px',
+              borderRadius: '6px',
+              border: '1px solid rgba(120, 140, 170, 0.3)',
+              background: 'rgba(20, 26, 36, 0.95)',
+              color: 'inherit',
+              font: 'inherit',
+              fontSize: '11px',
+            },
+          },
+          ...modelKeys.map((key) => h('option', { key, value: key }, key)),
+        ),
+        h(
+          'label',
+          {
+            style: {
+              padding: '5px 8px',
+              borderRadius: '6px',
+              border: '1px dashed rgba(120, 140, 170, 0.45)',
+              background: 'rgba(30, 38, 50, 0.9)',
+              fontSize: '11px',
+              whiteSpace: 'nowrap',
+              cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
+            },
+            title: '给左边选中的型号导入 **3D 几何**（.glb / .gltf）。这是"建模"，与"项目"是两回事。',
+          },
+          busy === 'model:file' ? '导入中…' : '＋ 导入建模（.glb）',
+          h('input', {
+            type: 'file',
+            accept: '.glb,.gltf,model/gltf-binary,model/gltf+json',
+            disabled: props.disabled || busy !== undefined || targetKey === '',
+            style: { display: 'none' },
+            onChange: (event: { target?: { files?: FileList | null } }) => {
+              const file = event.target?.files?.[0]
+              if (file === undefined || targetKey === '') return
+              setBusy('model:file')
+              void props.onImportModel(targetKey, file).then((error) => {
+                setBusy(undefined)
+                if (error !== undefined) setFailure(`建模导入失败：${error}`)
+                else setNonce((n) => n + 1)
+              })
+            },
+          }),
+        ),
       ),
     ),
   )
