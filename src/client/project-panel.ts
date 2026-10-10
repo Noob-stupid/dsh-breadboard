@@ -316,12 +316,22 @@ export function ProjectPanel(props: ProjectPanelProps) {
     ),
   )
 
-  if (body.length === 0) {
-    body.push(
+  // ★★ 空态提示 —— **条件必须是 `projects.length`，不能是 `body.length`**
+  //
+  //   ⚠️ 原来写的是 `if (body.length === 0)`，而"导入文件"那个按钮是**无条件**
+  //     推进 body 的 ⇒ **这个条件永远不成立** ⇒ 空态提示**永远不显示**。
+  //     用户看到的就是一个**孤零零的导入按钮**，然后问"我怎么没看见切换项目的按钮"。
+  //
+  //   ⇒ 一个列表为空时，**必须有一句话说明"为什么空、下一步做什么"**。
+  //     否则用户会以为功能坏了 —— 而这正是本次的经过。
+  if (projects.length === 0) {
+    body.unshift(
       h(
         'div',
-        { key: '__empty', style: { fontSize: '11px', opacity: 0.7, lineHeight: 1.5 } },
-        '你还没有任何项目。用 agent 建一个（hw_save_project），或导入上面的样例。',
+        { key: '__empty', style: { fontSize: '11px', opacity: 0.75, lineHeight: 1.6 } },
+        '你还没有任何项目 —— 所以这里没有可切换的东西。',
+        h('br'),
+        '用下面的「导入项目文件」加一个（.json），或让 agent 用 hw_save_project 建一个。',
       ),
     )
   }
