@@ -95,6 +95,20 @@ export interface HardwarePaletteProps {
   readonly onPick: (modelKey: string) => void
   /** 宿主不可用时禁用（如 WS 未连上）。 */
   readonly disabled?: boolean
+  /**
+   * **已经有真几何的型号键**（来自 `/api/model`）。
+   *
+   * ★★ 用户原话：「**别的用户初始是没有的吧，只有你导入或下载后或主动加入才有这个快捷列表**」
+   *   —— 对。`HARDWARE_MODELS` 是**型号表**（这块板子长什么样、有几个脚），
+   *   而**有没有模型文件**是另一回事：
+   *   `rpi-4b` / `mpl3115a2` / `mpr121` 是从 step.parts 导入的**第三方模型，插件不分发**
+   *   ⇒ 别人装上插件时这三个**没有几何**，点了只会得到一个占位方块。
+   *
+   * ⇒ 列表**只列有几何的**（选项 A）。没有的不出现，去 ② 里导入、或让 agent 建模。
+   *   ⚠️ 这比"列出来但点下去是方块"诚实：**看不见 ≠ 骗你**，而"看起来能用但其实是方块"
+   *     正是本项目失败族里最贵的那一类。
+   */
+  readonly available: readonly string[]
 }
 
 /** 毫米显示：契约里尺寸单位是米。 */
@@ -103,11 +117,13 @@ function mm(value: number): string {
 }
 
 export function HardwarePalette(props: HardwarePaletteProps) {
-  const models = Object.values(HARDWARE_MODELS)
+  const models = Object.values(HARDWARE_MODELS).filter((model) => props.available.includes(model.key))
 
   return createElement(
     Panel,
-    { title: '① 添加器件', subtitle: '点一下放进场景（② 是给它们换真实模型）' },
+    // ★ 默认收起（用户原话：「左边这些默认都是收起来的才行」）——
+    //   三个面板全展开会占掉半个屏幕，而**主操作是③项目切换**，不是这个。
+    { title: '① 添加器件', subtitle: '点一下放进场景（② 是给它们换真实模型）', defaultOpen: false },
     // ★★ 器件列表要**自己能滚**（2026-10-10 加）
     //
     //   原来这些按钮是**直接铺在 Panel 里**的 —— 型号只有 7 个时看不出来，
@@ -120,6 +136,15 @@ export function HardwarePalette(props: HardwarePaletteProps) {
     createElement(
       'div',
       { style: PALETTE_LIST_STYLE },
+      // ★ 一个型号都没有时给一句**人话**，而不是一片空白 ——
+      //   空白会被读成"插件坏了"，而其实只是"还没导入模型"。
+      models.length === 0
+        ? createElement(
+            'div',
+            { key: '__none', style: { fontSize: '11px', opacity: 0.65, lineHeight: 1.5 } },
+            '还没有任何型号有真实几何。去 ② 里搜索/导入模型，或让 agent 帮你建模。',
+          )
+        : null,
       ...models.map((model) =>
         createElement(
           'button',
@@ -257,7 +282,7 @@ export function ImportControls(props: ImportControlsProps) {
 
   return createElement(
     Panel,
-    { title: '② 换装模型', subtitle: '搜模型 / 导入文件 · 给上面某个型号换装（没换就用占位盒）' },
+    { title: '② 换装模型', subtitle: '搜模型 / 导入文件 · 给上面某个型号换装（没换就用占位盒）', defaultOpen: false },
     // ── 面板内搜索：结果直接列出，**不跳浏览器** ──
     createElement(
       'div',

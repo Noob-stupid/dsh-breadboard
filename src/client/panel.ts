@@ -389,7 +389,12 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
         disabled: !ready,
         revision: channelRef.current?.latest()?.revision ?? 0,
       }),
-      createElement(HardwarePalette, { onPick: handlePick, disabled: !ready }),
+      createElement(HardwarePalette, {
+        onPick: handlePick,
+        disabled: !ready,
+        // ★ 只列**有真几何**的型号（用户选的 A）—— 见 HardwarePaletteProps.available 的说明
+        available: records.filter((record) => record.modelKey !== undefined).map((record) => record.modelKey),
+      }),
       createElement(ImportControls, {
         records,
         onImport: (modelKey, file) => void handleImport(modelKey, file),
