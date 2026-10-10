@@ -194,4 +194,13 @@ export interface ProjectStatus {
   readonly missing: readonly string[]
   /** 人类可读的判据说明，键是判据名。 */
   readonly requirements: Readonly<Record<string, string>>
+  /**
+   * **完整图纸**。
+   *
+   * ★ 带上它是为了让界面能**导出**（用户原话：「这个也能**选择路径保存**」）——
+   *   导出要的是整份 `ProjectProfile`，而状态里原本只有摘要。
+   * ★ 一份项目只有几 KB，随列表一起发不构成负担；分两条路由反而多一次往返，
+   *   而且"列表里有、详情拉不到"是另一类要单独处理的失败态。
+   */
+  readonly profile: ProjectProfile
 }

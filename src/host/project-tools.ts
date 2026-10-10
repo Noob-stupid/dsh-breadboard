@@ -131,6 +131,8 @@ export function projectStatuses(
       linkUp: imported && link.up,
       missing: link.missing,
       requirements: LINK_LABEL,
+      // ★ 带上完整图纸：界面要能**导出**（用户："这个也能选择路径保存"）
+      profile: project,
     }
   })
 }

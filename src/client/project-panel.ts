@@ -192,6 +192,43 @@ export function ProjectPanel(props: ProjectPanelProps) {
           },
           busy === `delete:${project.id}` ? '删除中…' : '删除此项目',
         ),
+        // ★★ **导出（另存为…）** —— 用户原话：「这个也能**选择路径保存**」
+        //
+        //   用浏览器的下载：**保存位置由用户在那个对话框里选** ——
+        //   这正是"选择路径保存"的标准做法。
+        // ⚠️ 不要自绘"路径输入框"：浏览器**拿不到真实路径**（安全限制），
+        //   最后还是要用户手打，而手打路径正是"看着能用其实用不了"的典型。
+        h(
+          'button',
+          {
+            type: 'button',
+            onClick: () => {
+              const payload = { format: 1, profile: project.profile }
+              const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+                type: 'application/json',
+              })
+              const url = URL.createObjectURL(blob)
+              const anchor = document.createElement('a')
+              anchor.href = url
+              anchor.download = `${project.id}.json`
+              anchor.click()
+              // ★ 立刻回收：不回收的话这份 blob 会一直挂在内存里（每导出一次多一份）
+              URL.revokeObjectURL(url)
+            },
+            title: '导出成 .json —— 保存位置在弹出的对话框里选',
+            style: {
+              padding: '4px 8px',
+              borderRadius: '6px',
+              border: '1px solid rgba(120, 140, 170, 0.35)',
+              background: 'rgba(40, 50, 66, 0.9)',
+              color: 'inherit',
+              font: 'inherit',
+              fontSize: '11px',
+              cursor: 'pointer',
+            },
+          },
+          '导出（另存为…）',
+        ),
       ),
     )
   }
