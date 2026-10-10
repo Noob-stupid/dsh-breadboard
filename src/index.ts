@@ -28,6 +28,7 @@ import { HardwareEventBus } from './core/events.ts'
 import { DeviceRegistry } from './core/sim/device-registry.ts'
 import { SimEngine } from './core/sim/engine.ts'
 import { ModelStore } from './core/models/store.ts'
+import { seedPackagedModels } from './core/models/seed.ts'
 import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
@@ -290,7 +291,7 @@ export function apply(ctx: AppContext, config: Config): void {
   const models = new ModelStore({ root: modelsRoot })
   log(`用户模型目录：${modelsRoot}`)
 
-  // ★★ 种子：把**随包发布的模型**补进用户目录（2026-10-10 加）
+  // ★★ 种子：把**随包发布的模型**补进用户目录
   //
   //   ⚠️⚠️ 补的是一个"开箱即用"的洞，代价很具体：
   //     模型原来只存在于用户目录（`~/.dsh/.../models`），**不在仓库里**
@@ -299,44 +300,22 @@ export function apply(ctx: AppContext, config: Config): void {
   //     用户原话：「**怎么还是这种建模呢……别的 agent 到时候是否也会这样呢**」——
   //     **会，只要模型不随插件走。**
   //
-  //   ★ 三条纪律：
-  //     ① **只补缺的，绝不覆盖** —— 用户自己导入/替换过的模型是他更信的那份，
-  //        被包里那份盖掉就是"我明明换过，怎么又变回去了"，而且不会报错。
-  //     ② **失败不影响启动** —— 种子是锦上添花，读不到包内目录就照常跑（只是没预置模型）。
-  //     ③ **日志要说清补了几个** —— 否则"为什么有模型"和"为什么没有"都无从判断。
+  //   ★ 逻辑全部在 `core/models/seed.ts` —— **抽出去是为了能测**。
+  //     上一版这段是内联的，而它带着一个「Promise 永远 !== undefined」的 bug
+  //     （见那个文件的注释），**因为没法测所以没抓住**。
   void (async () => {
-    try {
-      const { readdir, mkdir, copyFile, access } = await import('node:fs/promises')
-      const { fileURLToPath } = await import('node:url')
-      // lib/index.js → 上一级就是插件根目录
-      const packaged = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'models')
-      const entries = await readdir(packaged, { withFileTypes: true })
-      let seeded = 0
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        // ⚠️⚠️ `ModelStore.get()` 是 **async** 的 —— 它返回 Promise，而 **Promise 永远 `!== undefined`**。
-        //   第一版写成 `if (models.get(k) !== undefined) continue` ⇒ **每个键都被当成"已经有了"**
-        //   ⇒ **一个都没补，而且不报错**（日志只会静默地什么都不打）。
-        //   ★ 这与本项目失败族里那条 `ok:true ≠ 效果发生` 是同一个形状：
-        //     **拿"有个对象回来了"当成"内容是我要的"**。⇒ 必须 `await`。
-        if ((await models.get(entry.name)) !== undefined) continue // ① 已经有了 → 不碰
-        const source = path.join(packaged, entry.name, 'model.bin')
-        try {
-          await access(source)
-        } catch {
-          continue
-        }
-        const target = path.join(modelsRoot, entry.name)
-        await mkdir(target, { recursive: true })
-        await copyFile(source, path.join(target, 'model.bin'))
-        seeded += 1
-      }
-      if (seeded > 0) {
-        log(`已从插件包补齐 ${String(seeded)} 个预置模型（缺哪个补哪个，未覆盖你导入的）`)
-      }
-    } catch (error) {
-      // ② 种子失败**不是启动失败** —— 照常跑，只是没有预置模型
-      log(`预置模型补齐跳过：${String(error)}`)
+    const { fileURLToPath } = await import('node:url')
+    // lib/index.js → 上一级就是插件根目录
+    const packagedDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'models')
+    const outcome = await seedPackagedModels({ packagedDir, store: models })
+    if (outcome.seeded.length > 0) {
+      log(
+        `已从插件包补齐 ${String(outcome.seeded.length)} 个预置模型：` +
+          `${outcome.seeded.join(', ')}（缺哪个补哪个，未覆盖你导入的）`,
+      )
+    }
+    if (outcome.failure !== undefined) {
+      log(`预置模型补齐跳过：${outcome.failure}`)
     }
   })()
 
