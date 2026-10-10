@@ -65,6 +65,95 @@ interface ProjectFile {
   readonly profile: ProjectProfile
 }
 
+/**
+ * 校验一份**用户给的**项目定义。
+ *
+ * ★★ 为什么必须校验：图纸可能是**用户从文件选的**（手写、别人给的、agent 生成的），
+ *   **不受我们控制**。少了这一步，坏数据会一路走到 `importProject` ——
+ *   那时的表现是「**导入成功，但场景里什么都没有**」，而调用方只看到 `ok:true`。
+ *   ⇒ 能判的都在**入口**判掉，并且**说清是哪一种坏**。
+ *
+ * ⚠️ 判的是**能不能用**，不是"完不完美"：多出来的字段一律保留
+ *   （不认识的字段不该让导入失败 —— 那会把"格式演进"变成"旧文件全废"）。
+ */
+export function validateProjectProfile(
+  raw: unknown,
+): { ok: true; profile: ProjectProfile } | { ok: false; reason: string } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, reason: '不是一个对象' }
+  const box = raw as Record<string, unknown>
+  const id = box.id
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) {
+    return { ok: false, reason: `id 不合法："${String(id)}"（只允许小写字母、数字、连字符，最长 64）` }
+  }
+  if (!Array.isArray(box.parts) || box.parts.length === 0) {
+    return { ok: false, reason: 'parts 缺失或为空 —— 一个器件都没有的项目没法导入' }
+  }
+  const partIds = new Set<string>()
+  for (const [index, item] of box.parts.entries()) {
+    if (item === null || typeof item !== 'object') return { ok: false, reason: `parts[${String(index)}] 不是对象` }
+    const part = item as Record<string, unknown>
+    if (typeof part.id !== 'string' || part.id === '') return { ok: false, reason: `parts[${String(index)}].id 缺失` }
+    if (typeof part.hardwareModel !== 'string' || part.hardwareModel === '') {
+      return { ok: false, reason: `parts[${String(index)}].hardwareModel 缺失` }
+    }
+    const position = part.position as Record<string, unknown> | undefined
+    if (
+      position === undefined ||
+      typeof position.x !== 'number' ||
+      typeof position.y !== 'number' ||
+      typeof position.z !== 'number'
+    ) {
+      return { ok: false, reason: `parts[${String(index)}].position 缺失或不是 {x,y,z} 数字` }
+    }
+    if (partIds.has(part.id)) return { ok: false, reason: `器件 id 重复："${part.id}"` }
+    partIds.add(part.id)
+  }
+  if (!Array.isArray(box.wires)) return { ok: false, reason: 'wires 缺失（可以是空数组）' }
+  for (const [index, item] of box.wires.entries()) {
+    const wire = item as Record<string, unknown> | null
+    for (const side of ['from', 'to'] as const) {
+      const end = wire?.[side] as Record<string, unknown> | undefined
+      if (end === undefined || typeof end.componentId !== 'string' || typeof end.portId !== 'string') {
+        return { ok: false, reason: `wires[${String(index)}].${side} 缺失 componentId / portId` }
+      }
+      // ★ 引用必须对得上 —— 对不上的线在导入时会**静默连不上**
+      if (!partIds.has(end.componentId)) {
+        return {
+          ok: false,
+          reason: `wires[${String(index)}].${side}.componentId="${end.componentId}" 不在 parts 里`,
+        }
+      }
+    }
+  }
+  const networkComponentId = box.networkComponentId
+  if (typeof networkComponentId !== 'string' || !partIds.has(networkComponentId)) {
+    return {
+      ok: false,
+      reason: `networkComponentId="${String(networkComponentId)}" 不在 parts 里 —— 出网的那台必须是项目里的器件`,
+    }
+  }
+  if (box.network === null || typeof box.network !== 'object') {
+    return { ok: false, reason: 'network 缺失（出网绑定）' }
+  }
+  // ★★ `link` 必须校验 —— 这条是**实测抓出来的**：
+  //   我手写了一份没写 `link` 的图纸，`save` 通过了，然后**列表路由直接抛**
+  //   （`projectStatuses` 读 `project.link.requires`）。
+  //   ⇒ 症状是"导入成功，但整个项目面板变成一条红字错误" —— 比导入失败更糟。
+  //
+  // ⚠️ 刻意**不给默认值**（比如 `[]` = 永远算连通）：那会让一份没写判据的图纸
+  //   **自称已连通**，而它可能连都没连过。"不知道"和"通了"必须分开。
+  const link = box.link as Record<string, unknown> | undefined
+  if (link === null || typeof link !== 'object' || !Array.isArray(link.requires)) {
+    return {
+      ok: false,
+      reason:
+        'link.requires 缺失 —— 必须写明"怎么算连通"（如 ["registered","config","reported","reporting"]），' +
+        '否则没法判断这个项目到底通没通',
+    }
+  }
+  return { ok: true, profile: box as unknown as ProjectProfile }
+}
+
 export class ProjectStore {
   readonly root: string
 

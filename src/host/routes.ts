@@ -106,6 +106,17 @@ export interface RouteDeps {
     readonly list: () => Promise<readonly ProjectStatus[]>
     /** 把随包样例装进用户目录。**只有用户显式导入时才调**（默认列表是空的）。 */
     readonly importSample: (projectId: string) => Promise<boolean>
+    /**
+     * **存一份用户给的项目定义**（从**文件**导入 / agent 建的）。
+     *
+     * ★ 与 `importSample` 分开而不是合成一个：那个的输入是**一个 id**，
+     *   这个的输入是**一整份图纸**。合成一个就得在实现里判"到底是哪种"，
+     *   而判错的表现是"**导入成功但项目是空的**" —— 最难查的一类。
+     *
+     * 返回**人话原因**（`undefined` = 成功）：文件是用户给的，可能缺字段、
+     * id 非法、根本不是 JSON —— 每一种都要说清是哪种。
+     */
+    readonly save: (profile: unknown) => Promise<string | undefined>
     readonly remove: (projectId: string) => Promise<boolean>
   }
 }
@@ -277,7 +288,8 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               const body = asRecord(await readJsonBody(req))
               const op = typeof body.op === 'string' ? body.op : ''
               const projectId = typeof body.projectId === 'string' ? body.projectId : ''
-              if (projectId === '') {
+              // ★ save 的 id 在图纸里（profile.id），不要求单独传 projectId
+              if (op !== 'save' && projectId === '') {
                 sendJson(res, 400, { ok: false, reason: '缺少 projectId' })
                 return
               }
@@ -286,6 +298,15 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
                 sendJson(res, done ? 200 : 404, {
                   ok: done,
                   ...(done ? {} : { reason: `没有这个样例："${projectId}"` }),
+                })
+                return
+              }
+              if (op === 'save') {
+                // ★ 整份图纸在 `profile` 里（用户从文件选的，或 agent 给的）
+                const reason = await projects.save(body.profile)
+                sendJson(res, reason === undefined ? 200 : 400, {
+                  ok: reason === undefined,
+                  ...(reason === undefined ? {} : { reason }),
                 })
                 return
               }

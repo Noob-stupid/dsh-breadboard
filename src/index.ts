@@ -28,7 +28,7 @@ import { HardwareEventBus } from './core/events.ts'
 import { DeviceRegistry } from './core/sim/device-registry.ts'
 import { SimEngine } from './core/sim/engine.ts'
 import { ModelStore } from './core/models/store.ts'
-import { ProjectStore } from './core/projects/store.ts'
+import { ProjectStore, validateProjectProfile } from './core/projects/store.ts'
 import { seedPackagedModels } from './core/models/seed.ts'
 import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
@@ -459,6 +459,19 @@ export function apply(ctx: AppContext, config: Config): void {
         //   启动就写等于又变成"内置项目"，而用户要的是"**别人是空的**"。
         importSample: async (projectId: string) =>
           (await projectStore.importSample(projectId)) !== undefined,
+        // ★ 用户从文件选的图纸**不受我们控制** ⇒ 入口就校验，并说清是哪一种坏。
+        //   少了这一步，坏数据会走到 importProject，表现是
+        //   「导入成功但场景里什么都没有」，而调用方只看到 ok:true。
+        save: async (profile: unknown) => {
+          const checked = validateProjectProfile(profile)
+          if (!checked.ok) return checked.reason
+          try {
+            await projectStore.save(checked.profile)
+            return undefined
+          } catch (error) {
+            return String(error)
+          }
+        },
         remove: (projectId: string) => projectStore.remove(projectId),
       },
       onError: (error) => {
