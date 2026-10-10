@@ -275,7 +275,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
             '格式：{ "id": "...", "label": "...", "parts": [...], "wires": [...], ' +
             '"networkComponentId": "...", "network": {...} }',
         },
-        busy === 'save:file' ? '导入中…' : '＋ 导入项目文件（打开文件夹选 .json）',
+        busy === 'save:file' ? '导入中…' : '＋ 导入项目',
         h('input', {
           type: 'file',
           accept: '.json,application/json',
@@ -329,9 +329,11 @@ export function ProjectPanel(props: ProjectPanelProps) {
       h(
         'div',
         { key: '__empty', style: { fontSize: '11px', opacity: 0.75, lineHeight: 1.6 } },
-        '你还没有任何项目 —— 所以这里没有可切换的东西。',
-        h('br'),
-        '用下面的「导入项目文件」加一个（.json），或让 agent 用 hw_save_project 建一个。',
+        // ★ 写**用户看得懂的话**。
+        //   ⚠️ 第一版这里写的是"或让 agent 用 hw_save_project 建一个" ——
+        //     那是**工具名**，对用户毫无意义（用户原话："这句话是什么意思"）。
+        //     ⇒ 面向用户的文案里**不出现内部工具名**；那些话属于 Skill，不属于界面。
+        '还没有项目。点下面的按钮，选一个 .json 文件就能加进来。',
       ),
     )
   }
