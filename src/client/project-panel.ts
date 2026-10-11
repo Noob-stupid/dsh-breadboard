@@ -63,6 +63,13 @@ export interface ProjectScanReport {
     readonly evidence: readonly string[]
   }[]
   readonly missingGeometry: readonly string[]
+  /**
+   * 因为**总预算**被跳过的文件数。
+   *
+   * ★ 如实报出来：请求体有上限（服务端 256KB），超出就得截断 ——
+   *   而**静默截断等于骗人**（用户会以为"整个项目都扫过了"）。
+   */
+  readonly skipped: number
 }
 
 export interface ProjectPanelProps {
@@ -350,7 +357,13 @@ export function ProjectPanel(props: ProjectPanelProps) {
             lineHeight: 1.5,
           },
         },
-        h('div', { style: { fontWeight: 600 } }, `扫描了 ${String(report.fileCount)} 个文件，这个项目看起来需要：`),
+        h(
+          'div',
+          { style: { fontWeight: 600 } },
+          `扫描了 ${String(report.fileCount)} 个文件` +
+            (report.skipped > 0 ? `（另有 ${String(report.skipped)} 个因体积上限跳过）` : '') +
+            '，这个项目看起来需要：',
+        ),
         ...report.matched.map((item) =>
           h(
             'div',

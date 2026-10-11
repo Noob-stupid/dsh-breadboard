@@ -402,17 +402,34 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           //   灌过去既慢，又会把"这个项目需要什么硬件"淹在噪声里。
           const interesting = files.filter(
             (file) =>
-              file.size <= 512 * 1024 &&
+              file.size <= 128 * 1024 &&
               !file.webkitRelativePath.includes('node_modules/') &&
               !file.webkitRelativePath.includes('.git/') &&
               /\.(ini|md|txt|json|ya?ml|py|c|cpp|h|hpp|toml|cfg|conf|env)$/i.test(file.name),
           )
-          const sample = await Promise.all(
-            interesting.slice(0, 400).map(async (file) => ({
-              path: file.webkitRelativePath || file.name,
-              text: (await file.text()).slice(0, 20_000),
-            })),
-          )
+          // ★★ **总预算**，不是"每个文件限多少" —— 这条是**实测抓出来的**：
+          //   服务端 `MAX_BODY_BYTES = 256KB`，而按"每文件 20KB × 最多 400 个"算，
+          //   最坏能送出 **8MB（中文 UTF-8 可达 24MB）** ⇒ **超出 30~90 倍**。
+          //   症状是：文件夹一大，扫描直接 `request body too large` 失败。
+          //   ⇒ 按**累计字节**截断，并且**如实报告跳过了多少**（静默截断等于骗人）。
+          const BUDGET = 180 * 1024
+          const sample: { path: string; text: string }[] = []
+          let used = 0
+          let skipped = 0
+          for (const file of interesting) {
+            if (used >= BUDGET) {
+              skipped += 1
+              continue
+            }
+            const text = (await file.text()).slice(0, 16_000)
+            const cost = text.length
+            if (used + cost > BUDGET) {
+              skipped += 1
+              continue
+            }
+            used += cost
+            sample.push({ path: file.webkitRelativePath || file.name, text })
+          }
           const response = await fetch(HTTP_ROUTES.projects, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
@@ -431,7 +448,7 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           // ★ 把报告**显示出来** —— 扫了不显示等于没扫。
           //   而且缺的型号要**点名**：那正是"写个清单发给用户 / 自己建模"的输入。
           if (body.report !== undefined) {
-            setScanReport(body.report)
+            setScanReport({ ...body.report, skipped })
           }
           return undefined
         },
