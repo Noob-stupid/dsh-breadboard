@@ -17,6 +17,7 @@ import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 import type { ProjectStatus } from '../contracts/projects.ts'
+import type { ProjectBody, ProjectScanOutcome } from '../core/projects/store.ts'
 import { HARDWARE_MODELS } from '../contracts/library.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import type { HardwareEventBus } from '../core/events.ts'
@@ -128,6 +129,29 @@ export interface RouteDeps {
      */
     readonly saveScene: (projectId: string) => Promise<string | undefined>
     readonly remove: (projectId: string) => Promise<boolean>
+    /**
+     * **项目本体**（用户导入的真实项目文件夹）。
+     *
+     * ★★ 用户原话：
+     *   > 上传项目本体，你**上传后那得显示项目啊**，
+     *   > 那个扫描可以**后续扫描按钮**，**先上传项目到那里**
+     *
+     *   ⇒ 两步分开：**先上传（进列表）**，**再扫描（按钮）**。
+     *     而不是"一上传就扫、扫完就没影了"。
+     */
+    readonly bodies: {
+      readonly list: () => Promise<readonly ProjectBody[]>
+      /** 存一份本体快照（用户选文件夹上传时）。 */
+      readonly save: (body: ProjectBody) => Promise<void>
+      readonly remove: (bodyId: string) => Promise<boolean>
+      /** **扫描一份已存的本体** —— 只有用户点"扫描"时才调。 */
+      readonly scan: (
+        bodyId: string,
+      ) => Promise<
+        | { readonly ok: true; readonly report: ProjectScanOutcome }
+        | { readonly ok: false; readonly reason: string }
+      >
+    }
   }
 }
 
@@ -146,7 +170,7 @@ export interface RouteDeps {
  *   报告里会带上"在哪几个文件里看到的"，用户能自己判断对不对。
  *   纯推断给不出证据，而**没有证据的结论在这里等于没有结论**。
  */
-async function scanProjectNeeds(
+export async function scanProjectNeeds(
   files: readonly { path?: unknown; text?: unknown }[],
   models: ModelStore | undefined,
 ): Promise<{
@@ -358,11 +382,17 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
             kind: 'exact' as const,
             path: HTTP_ROUTES.projects,
             handler: async (req: IncomingMessage, res: ServerResponse) => {
-              const projects = deps.projects
-              if (projects === undefined) return
+              const face = deps.projects
+              if (face === undefined) return
               if (req.method === 'GET') {
                 // ★ 项目现在是**用户目录里的文件** ⇒ 每次现读（会变），不能缓存
-                sendJson(res, 200, await projects.list())
+                // ★ 连**项目本体**一起返回：用户"上传后那得显示项目啊" ——
+                //   列表要同时显示"装配图纸"和"导入的真实项目"两类东西。
+                const [list, bodies] = await Promise.all([
+                  face.list(),
+                  deps.projects?.bodies.list() ?? Promise.resolve([]),
+                ])
+                sendJson(res, 200, { projects: list, bodies })
                 return
               }
               if (req.method !== 'POST') {
@@ -373,12 +403,17 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               const op = typeof body.op === 'string' ? body.op : ''
               const projectId = typeof body.projectId === 'string' ? body.projectId : ''
               // ★ save 的 id 在图纸里（profile.id），不要求单独传 projectId
-              if (op !== 'save' && op !== 'scan-project' && projectId === '') {
+              // ★ 本体那几个 op 用的是 `bodyId`（或自带 id）——**本体与项目定义
+              //   是完全不同的东西**（真实项目文件夹 vs 装配图纸），
+              //   拿 projectId 去要求它们，症状是"上传本体被拒：缺少 projectId"。
+              const needsProjectId =
+                op !== 'save' && op !== 'scan-project' && !op.endsWith('-body')
+              if (needsProjectId && projectId === '') {
                 sendJson(res, 400, { ok: false, reason: '缺少 projectId' })
                 return
               }
               if (op === 'import-sample') {
-                const done = await projects.importSample(projectId)
+                const done = await face.importSample(projectId)
                 sendJson(res, done ? 200 : 404, {
                   ok: done,
                   ...(done ? {} : { reason: `没有这个样例："${projectId}"` }),
@@ -387,7 +422,7 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               }
               if (op === 'save') {
                 // ★ 整份图纸在 `profile` 里（用户从文件选的，或 agent 给的）
-                const reason = await projects.save(body.profile)
+                const reason = await face.save(body.profile)
                 sendJson(res, reason === undefined ? 200 : 400, {
                   ok: reason === undefined,
                   ...(reason === undefined ? {} : { reason }),
@@ -396,11 +431,34 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               }
               if (op === 'save-scene') {
                 // ★ **把眼前这套装配存回项目** —— 用户："关键是在哪把现有建模导出保存"
-                const reason = await projects.saveScene(projectId)
+                const reason = await face.saveScene(projectId)
                 sendJson(res, reason === undefined ? 200 : 400, {
                   ok: reason === undefined,
                   ...(reason === undefined ? {} : { reason }),
                 })
+                return
+              }
+              if (op === 'import-body') {
+                // ★ 先**上传**（进列表），扫描留到用户点按钮 —— 用户明确要求的两步分开
+                const body0 = body.body as ProjectBody | undefined
+                if (body0 === undefined || typeof body0.id !== 'string') {
+                  sendJson(res, 400, { ok: false, reason: '缺少 body' })
+                  return
+                }
+                await face.bodies.save(body0)
+                sendJson(res, 200, { ok: true })
+                return
+              }
+              if (op === 'scan-body') {
+                const bodyId = typeof body.bodyId === 'string' ? body.bodyId : ''
+                const result = await face.bodies.scan(bodyId)
+                sendJson(res, result.ok ? 200 : 400, result.ok ? { ok: true, report: result.report } : { ok: false, reason: result.reason })
+                return
+              }
+              if (op === 'delete-body') {
+                const bodyId = typeof body.bodyId === 'string' ? body.bodyId : ''
+                const done = await face.bodies.remove(bodyId)
+                sendJson(res, done ? 200 : 404, { ok: done, ...(done ? {} : { reason: `没有这个本体：${bodyId}` }) })
                 return
               }
               if (op === 'scan-project') {
@@ -420,7 +478,7 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
                 return
               }
               if (op === 'delete') {
-                const done = await projects.remove(projectId)
+                const done = await face.remove(projectId)
                 sendJson(res, done ? 200 : 404, {
                   ok: done,
                   ...(done ? {} : { reason: `没有这个项目："${projectId}"` }),

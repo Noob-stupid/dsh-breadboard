@@ -430,26 +430,30 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
             used += cost
             sample.push({ path: file.webkitRelativePath || file.name, text })
           }
+          // ★★ **只上传，不扫描** —— 用户原话：
+          //   > 那个扫描可以**后续扫描按钮**，**先上传项目到那里**
+          //   ⇒ 上传后项目进列表（看得见），扫描是它旁边的一个按钮。
+          const bodyId = `body-${String(Date.now())}`
+          const source =
+            sample[0]?.path.split('/')[0] ?? '未知项目'
           const response = await fetch(HTTP_ROUTES.projects, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ op: 'scan-project', files: sample }),
+            body: JSON.stringify({
+              op: 'import-body',
+              body: {
+                id: bodyId,
+                label: source,
+                source,
+                importedAt: new Date().toISOString(),
+                fileCount: files.length,
+                files: sample,
+                skipped,
+              },
+            }),
           })
-          const body = (await response.json()) as {
-            ok?: boolean
-            reason?: string
-            report?: {
-              fileCount: number
-              matched: { modelKey: string; label: string; hasGeometry: boolean; evidence: string[] }[]
-              missingGeometry: string[]
-            }
-          }
+          const body = (await response.json()) as { ok?: boolean; reason?: string }
           if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
-          // ★ 把报告**显示出来** —— 扫了不显示等于没扫。
-          //   而且缺的型号要**点名**：那正是"写个清单发给用户 / 自己建模"的输入。
-          if (body.report !== undefined) {
-            setScanReport({ ...body.report, skipped })
-          }
           return undefined
         },
         // ★ **导入建模组** —— 一个文件夹，里面按型号分（`<型号键>/model.glb`）

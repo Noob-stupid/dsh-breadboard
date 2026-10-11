@@ -72,6 +72,31 @@ export interface ProjectScanReport {
   readonly skipped: number
 }
 
+/**
+ * **项目本体**在界面上的样子（服务端 `ProjectBody` 的视图）。
+ *
+ * ★ 用户原话：「上传项目本体，你**上传后那得显示项目啊**，
+ *   那个扫描可以**后续扫描按钮**，**先上传项目到那里**」
+ */
+export interface ProjectBodyView {
+  readonly id: string
+  readonly label: string
+  /** 用户选的那个文件夹名（如 `MAX_xiangmu`）。 */
+  readonly source: string
+  readonly importedAt: string
+  readonly fileCount: number
+  readonly skipped: number
+  readonly report?: {
+    readonly matched: readonly {
+      readonly modelKey: string
+      readonly label: string
+      readonly hasGeometry: boolean
+      readonly evidence: readonly string[]
+    }[]
+    readonly missingGeometry: readonly string[]
+  }
+}
+
 export interface ProjectPanelProps {
   /** 切换到这个项目（走 `import_project` 动作，与工具同一条路）。 */
   readonly onSwitch: (projectId: string) => void
@@ -104,7 +129,7 @@ export interface ProjectPanelProps {
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
 async function callProjects(
-  op: 'import-sample' | 'delete' | 'save' | 'save-scene',
+  op: 'import-sample' | 'delete' | 'save' | 'save-scene' | 'scan-body' | 'delete-body',
   projectId: string,
   profile?: unknown,
 ): Promise<string | undefined> {
@@ -112,7 +137,13 @@ async function callProjects(
     const response = await fetch(HTTP_ROUTES.projects, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op, projectId, ...(profile !== undefined ? { profile } : {}) }),
+      // ★ scan-body / delete-body 认的是 odyId，不是 projectId ——
+      //   两者是不同的东西（本体 vs 装配图纸），传错会**静默找不到**。
+      body: JSON.stringify({
+        op,
+        ...(op === 'scan-body' || op === 'delete-body' ? { bodyId: projectId } : { projectId }),
+        ...(profile !== undefined ? { profile } : {}),
+      }),
     })
     const body = (await response.json()) as { ok?: boolean; reason?: string }
     if (body.ok === true) return undefined
@@ -124,13 +155,22 @@ async function callProjects(
 
 export function ProjectPanel(props: ProjectPanelProps) {
   const [projects, setProjects] = useState<readonly ProjectStatus[]>([])
+  /**
+   * **项目本体**（用户上传的真实项目文件夹）。
+   *
+   * ★ 用户原话：「上传项目本体，你**上传后那得显示项目啊**」——
+   *   所以它必须**进列表**，而不是"扫完就没影了"。
+   */
+  const [bodies, setBodies] = useState<readonly ProjectBodyView[]>([])
   const [failure, setFailure] = useState<string | undefined>(undefined)
   /** 增删之后要让 `useEffect` 重跑 —— 项目文件在磁盘上变了。 */
   const [nonce, setNonce] = useState(0)
   const [busy, setBusy] = useState<string | undefined>(undefined)
-  /** 建模导入的目标型号（select 的当前值）。 */
 
-  const run = (op: 'import-sample' | 'delete' | 'save-scene', projectId: string): void => {
+  const run = (
+    op: 'import-sample' | 'delete' | 'save-scene' | 'scan-body' | 'delete-body',
+    projectId: string,
+  ): void => {
     setBusy(`${op}:${projectId}`)
     void callProjects(op, projectId).then((error) => {
       setBusy(undefined)
@@ -150,9 +190,13 @@ export function ProjectPanel(props: ProjectPanelProps) {
       try {
         const response = await fetch(HTTP_ROUTES.projects)
         if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
-        const list = (await response.json()) as ProjectStatus[]
+        const payload = (await response.json()) as {
+          projects?: ProjectStatus[]
+          bodies?: ProjectBodyView[]
+        }
         if (alive) {
-          setProjects(list)
+          setProjects(payload.projects ?? [])
+          setBodies(payload.bodies ?? [])
           setFailure(undefined)
         }
       } catch (error) {
@@ -380,6 +424,123 @@ export function ProjectPanel(props: ProjectPanelProps) {
                 ' —— 网上有就导入建模组；没有就让 agent 按这个清单建模。',
             )
           : h('div', { style: { marginTop: '3px', color: '#7ee0a0' } }, '需要的型号都已有几何 ✓'),
+      ),
+    )
+  }
+
+  // ★★ **项目本体列表** —— 用户原话：
+  //
+  //   > 这个上传项目本体，你**上传后那得显示项目啊**，
+  //   > 那个扫描可以**后续扫描按钮**，**先上传项目到那里**
+  //
+  //   ⇒ 上传后**进列表**（看得见、有名字、有文件数），
+  //     扫描是它自己的一个按钮 —— 而不是"一上传就扫、扫完就没影了"。
+  if (bodies.length > 0) {
+    body.push(
+      h(
+        'div',
+        {
+          key: '__bodies',
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            paddingTop: '4px',
+            borderTop: '1px solid rgba(120, 140, 170, 0.18)',
+          },
+        },
+        h('div', { style: { fontSize: '11px', opacity: 0.7 } }, '已上传的项目本体：'),
+        ...bodies.map((item) =>
+          h(
+            'div',
+            {
+              key: item.id,
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                padding: '7px',
+                borderRadius: '6px',
+                background: 'rgba(20, 26, 36, 0.92)',
+                border: '1px solid rgba(120, 140, 170, 0.22)',
+              },
+            },
+            h('div', { style: { fontSize: '12px', fontWeight: 600 } }, item.source),
+            h(
+              'div',
+              { style: { fontSize: '10px', opacity: 0.6 } },
+              `${String(item.fileCount)} 个文件` +
+                (item.skipped > 0 ? `（采样时跳过 ${String(item.skipped)} 个）` : '') +
+                ` · ${item.importedAt.slice(0, 19).replace('T', ' ')}`,
+            ),
+            // 扫描结果（扫过才有）
+            item.report === undefined
+              ? h('div', { style: { fontSize: '10px', opacity: 0.55 } }, '还没扫描过')
+              : h(
+                  'div',
+                  { style: { fontSize: '10px', lineHeight: 1.5 } },
+                  ...item.report.matched.map((hit) =>
+                    h(
+                      'div',
+                      { key: hit.modelKey, title: `证据：${hit.evidence.join('、')}` },
+                      `${hit.hasGeometry ? '✅' : '❌'} ${hit.label}`,
+                    ),
+                  ),
+                  item.report.missingGeometry.length > 0
+                    ? h(
+                        'div',
+                        { style: { color: '#ffc46b' } },
+                        `缺几何：${item.report.missingGeometry.join('、')}`,
+                      )
+                    : h('div', { style: { color: '#7ee0a0' } }, '需要的型号都已有几何 ✓'),
+                ),
+            h(
+              'div',
+              { style: { display: 'flex', gap: '5px' } },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  disabled: props.disabled || busy !== undefined,
+                  onClick: () => run('scan-body', item.id),
+                  title: '扫描这个项目的文件，得出它需要哪些硬件、以及哪些还缺几何',
+                  style: {
+                    flex: '1',
+                    padding: '5px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(120, 170, 200, 0.4)',
+                    background: 'rgba(36, 56, 76, 0.9)',
+                    color: 'inherit',
+                    font: 'inherit',
+                    fontSize: '11px',
+                    cursor: props.disabled ? 'not-allowed' : 'pointer',
+                  },
+                },
+                busy === `scan-body:${item.id}` ? '扫描中…' : '扫描需求',
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  disabled: props.disabled || busy !== undefined,
+                  onClick: () => run('delete-body', item.id),
+                  title: '把这个本体从列表里删掉（不影响别的东西）',
+                  style: {
+                    padding: '5px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(180, 110, 110, 0.4)',
+                    background: 'rgba(70, 40, 40, 0.75)',
+                    color: 'inherit',
+                    font: 'inherit',
+                    fontSize: '11px',
+                    cursor: props.disabled ? 'not-allowed' : 'pointer',
+                  },
+                },
+                '删除',
+              ),
+            ),
+          ),
+        ),
       ),
     )
   }

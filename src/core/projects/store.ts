@@ -50,6 +50,8 @@ export class ProjectStoreError extends Error {
 export interface ProjectStoreOptions {
   /** 项目目录（`~/.dsh/dsh-hardware-sandbox/projects`）。 */
   readonly root: string
+  /** 本体快照目录。省略则 `<root>/../bodies`。 */
+  readonly bodiesRoot?: string
 }
 
 /**
@@ -210,11 +212,115 @@ export function captureProject(
   }
 }
 
+/**
+ * **项目本体快照** —— 用户导入的那个**真实项目文件夹**留下的一份记录。
+ *
+ * ★★ 用户原话：
+ *   > 这个上传项目本体，你**上传后那得显示项目啊**，
+ *   > 那个扫描可以**后续扫描按钮**，**先上传项目到那里**
+ *
+ *   ⇒ 两步分开：**先上传（进列表）**，**再扫描（按钮）**。
+ *     而不是"一上传就扫、扫完就没影了"。
+ *
+ * ★ 为什么要把文本样本**存下来**：扫描要读文件内容，而浏览器**不会再给一次**
+ *   （用户不会再选一遍文件夹）⇒ 不存就只能当场扫完。
+ *   样本有总预算（180KB），存下来完全可行。
+ *
+ * ★ 为什么不存**整个文件夹**：真实项目可能几百 MB（node_modules…），
+ *   而扫描要的只是**配置与文档**。存整个文件夹既没必要，也会把磁盘吃光。
+ */
+export interface ProjectBody {
+  readonly id: string
+  readonly label: string
+  /** 用户选的那个文件夹的名字（如 `MAX_xiangmu`）—— 列表里要显示它。 */
+  readonly source: string
+  readonly importedAt: string
+  /** 这个文件夹里一共有多少文件（**全部**，不只是被采样的）。 */
+  readonly fileCount: number
+  /** 采样的文本文件（受总预算限制）。 */
+  readonly files: readonly { readonly path: string; readonly text: string }[]
+  /** 因为预算被跳过的文件数（如实记，别让人以为全扫过了）。 */
+  readonly skipped: number
+  /** 最后一次扫描的结果（没扫过就是 `undefined`）。 */
+  readonly report?: ProjectScanOutcome
+}
+
+/** 一次扫描的结论。 */
+export interface ProjectScanOutcome {
+  readonly at: string
+  readonly matched: readonly {
+    readonly modelKey: string
+    readonly label: string
+    readonly hasGeometry: boolean
+    readonly evidence: readonly string[]
+  }[]
+  readonly missingGeometry: readonly string[]
+}
+
 export class ProjectStore {
   readonly root: string
+  /**
+   * 本体快照的目录 —— **与项目定义分开**。
+   *
+   * ★ 分开的理由不是洁癖：`list()` 会把 `root` 下每个 `.json` 当成一份**项目定义**。
+   *   本体快照的形状完全不同（有 `files` 数组）⇒ 混在一起，`list()` 会把它们
+   *   读成"坏文件"，列表里冒出一堆莫名其妙的红字。
+   */
+  readonly bodiesRoot: string
 
   constructor(options: ProjectStoreOptions) {
     this.root = options.root
+    this.bodiesRoot = options.bodiesRoot ?? path.join(options.root, '..', 'bodies')
+  }
+
+  /* ─────────────────── 项目本体（用户导入的真实项目文件夹）─────────────────── */
+
+  async listBodies(): Promise<{ bodies: ProjectBody[]; broken: string[] }> {
+    let names: string[]
+    try {
+      names = await readdir(this.bodiesRoot)
+    } catch {
+      return { bodies: [], broken: [] } // 目录不存在 = 一个本体都没导入过
+    }
+    const bodies: ProjectBody[] = []
+    const broken: string[] = []
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue
+      try {
+        const text = await readFile(path.join(this.bodiesRoot, name), 'utf8')
+        bodies.push(JSON.parse(text) as ProjectBody)
+      } catch {
+        broken.push(name)
+      }
+    }
+    return { bodies, broken }
+  }
+
+  async getBody(id: string): Promise<ProjectBody | undefined> {
+    try {
+      const text = await readFile(path.join(this.bodiesRoot, `${id}.json`), 'utf8')
+      return JSON.parse(text) as ProjectBody
+    } catch {
+      return undefined
+    }
+  }
+
+  async saveBody(body: ProjectBody): Promise<void> {
+    try {
+      await mkdir(this.bodiesRoot, { recursive: true })
+      await writeFile(path.join(this.bodiesRoot, `${body.id}.json`), `${JSON.stringify(body, null, 2)}\n`, 'utf8')
+    } catch (error) {
+      throw new ProjectStoreError('io', `写本体快照失败：${String(error)}`)
+    }
+  }
+
+  async removeBody(id: string): Promise<boolean> {
+    try {
+      await rm(path.join(this.bodiesRoot, `${id}.json`))
+      return true
+    } catch {
+      return false
+    }
   }
 
   #fileOf(projectId: string): string {

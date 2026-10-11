@@ -29,9 +29,10 @@ import { DeviceRegistry } from './core/sim/device-registry.ts'
 import { SimEngine } from './core/sim/engine.ts'
 import { ModelStore } from './core/models/store.ts'
 import { ProjectStore, captureProject, validateProjectProfile } from './core/projects/store.ts'
+import type { ProjectBody, ProjectScanOutcome } from './core/projects/store.ts'
 import { seedPackagedModels } from './core/models/seed.ts'
 import { StepPartsClient } from './core/models/step-parts.ts'
-import { createRouteBundle, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
+import { createRouteBundle, scanProjectNeeds, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, projectStatuses } from './host/project-tools.ts'
@@ -486,6 +487,26 @@ export function apply(ctx: AppContext, config: Config): void {
           }
         },
         remove: (projectId: string) => projectStore.remove(projectId),
+        // ★ **项目本体**：用户上传的真实项目文件夹（先上传，扫描是后续按钮）
+        bodies: {
+          list: async () => (await projectStore.listBodies()).bodies,
+          save: async (body: ProjectBody) => {
+            await projectStore.saveBody(body)
+          },
+          remove: (bodyId: string) => projectStore.removeBody(bodyId),
+          scan: async (bodyId: string) => {
+            const body = await projectStore.getBody(bodyId)
+            if (body === undefined) return { ok: false as const, reason: `没有这个本体：${bodyId}` }
+            const scanned = await scanProjectNeeds(body.files, models)
+            const report: ProjectScanOutcome = {
+              at: new Date().toISOString(),
+              matched: scanned.matched,
+              missingGeometry: scanned.missingGeometry,
+            }
+            await projectStore.saveBody({ ...body, report })
+            return { ok: true as const, report }
+          },
+        },
       },
       onError: (error) => {
         warn(`路由 handler 抛错：${String(error)}`)
