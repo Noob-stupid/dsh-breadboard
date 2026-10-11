@@ -20,7 +20,8 @@
     "cordis.patch.yml",
     "skill",
     "docs",
-    "models"
+    "models",
+    "scripts"
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {
@@ -43,6 +44,7 @@
     "build": "bash scripts/build.sh",
     "link": "node scripts/link-deps.mjs",
     "postinstall": "node scripts/link-deps.mjs",
+    "prepare": "node scripts/prepare.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:client": "tsc -p tsconfig.client.json --noEmit",
     "build:client": "tsdown",
