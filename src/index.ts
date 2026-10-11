@@ -278,6 +278,51 @@ export function apply(ctx: AppContext, config: Config): void {
   let projectStatusProvider: (() => Promise<readonly ProjectStatus[]>) | undefined
 
 
+  /**
+   * ★★ **把 Skill 注册成"插件自带"** —— 这是"别人下载后 agent 就明白"的最后一环。
+   *
+   * ⚠️⚠️ 走过的弯路，记下来免得重犯：
+   *   我一开始把 `SKILL.md` 放进 `~/.dsh/skills/`，**界面上看得到**（设置页照列那个目录），
+   *   但 `skill dsh-hardware-sandbox` 一直报 **`unknown or no longer available`**。
+   *
+   *   原因：读用户目录的那个 provider 是 **`dsh-skill-filesystem`，而它在 profile 里是
+   *   `[disabled]`** ⇒ **界面显示 ≠ agent 能加载**。
+   *   而 `office-docx` 那三个能用的，标签是「**插件自带**」—— 它们是**随插件注册**的。
+   *
+   *   ⇒ 正确做法是 `ctx.skills.register(...)`：**别人装上插件就有，不用去开任何开关**。
+   *
+   * ★ `SKILL.md` 仍是**唯一真相**（不把正文抄成一份 TS 字符串）：
+   *   读包内文件、剥掉 frontmatter、把正文交给注册。
+   *   ⚠️ 读不到时**不出声地跳过就等于骗人** —— 所以打日志说清楚。
+   */
+  void (async () => {
+    try {
+      const skills = (ctx as { skills?: { register: (input: unknown) => () => void } }).skills
+      if (skills === undefined) {
+        log('未注册 Skill：这个 profile 里没有 skills 服务') // 不是错误，只是这项能力不可用
+        return
+      }
+      const { readFile } = await import('node:fs/promises')
+      const { fileURLToPath } = await import('node:url')
+      const skillFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'skill', 'SKILL.md')
+      const raw = await readFile(skillFile, 'utf8')
+      const matched = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw)
+      const front = matched?.[1] ?? ''
+      const content = (matched === null ? raw : raw.slice(matched[0].length)).trim()
+      const name = /^name:\s*(.+)$/m.exec(front)?.[1]?.trim() ?? 'dsh-hardware-sandbox'
+      const description = /^description:\s*(.+)$/m.exec(front)?.[1]?.trim() ?? ''
+      if (description === '' || content === '') {
+        warn(`Skill 注册跳过：${skillFile} 缺 description 或正文`)
+        return
+      }
+      skills.register({ name, description, content })
+      log(`已注册 Skill：${name}（${String(content.length)} 字）`)
+    } catch (error) {
+      // ★ 注册失败**不影响插件本体**，但必须说出来
+      warn(`Skill 注册失败：${String(error)}`)
+    }
+  })()
+
   const clock = new VirtualClock({
     step: config.step,
     yieldBudgetMs: config.yieldBudgetMs,
