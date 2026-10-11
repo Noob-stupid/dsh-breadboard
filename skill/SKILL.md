@@ -23,18 +23,22 @@ hw_edit_assembly / hw_import_project  →  改
 失败会给出**原因码**，照着它改，不要盲试
 ```
 
-**原因码与对策**（每一个都对应一个具体动作）：
+**原因码与对策**（与契约 `WarningCode` **逐项对照，共 12 项**）：
 
 | 原因码 | 意思 | 该做什么 |
 |---|---|---|
-| `protocol_mismatch` | 两端信号种类不同（i2c ↔ spi） | 换端口；或确认该脚支持哪种信号 |
-| `voltage_mismatch` | 电压不同（3.3 ↔ 5） | 换脚或加电平转换 |
-| `direction_conflict` | 两个输出对接 / 两个供电对接 | 至少一端要改成输入 |
-| `port_occupied` | 这个脚被别的线占了 | 换脚，或先拔掉那根 |
-| `already_connected` | **就是这一根**已经连了 | 不用再连 |
-| `component_pinned` | 组件被钉住了 | 先 `set_pinned:false` |
-| `power_exceeded` | 供电不够 | 减少器件或加电源 |
 | `bad_params` | 参数不合法（如 NaN 角度） | 检查数值 |
+| `direction_conflict` | 两个输出对接 / 两个供电对接 | 至少一端要改成输入 |
+| `protocol_mismatch` | 两端信号种类不同（i2c ↔ spi） | 换端口；或确认该脚支持哪种信号 |
+| `port_occupied` | 这个脚被别的线占了 | 换脚，或先拔掉那根 |
+| `voltage_mismatch` | 电压不同（3.3 ↔ 5） | 换脚或加电平转换 |
+| `power_exceeded` | 供电不够 | 减少器件或加电源 |
+| `i2c_address_conflict` | 总线上两个器件地址撞了 | 改地址脚（SDO/AD0） |
+| `i2c_pullup_missing` | 总线没接上拉电阻 | 给 SCL/SDA 加上拉 |
+| `unconnected_port` | 有端口一根线都没接 | 按需连接；确认不是忘了另一根 |
+| `unknown_hardware_model` | 找不到这个型号 | 核对型号键（用 hw_get_assembly 看现有键） |
+| `component_pinned` | 组件被钉住了 | 先 `set_pinned:false` |
+| `already_connected` | **就是这一根**已经连了 | 不用再连 |
 
 **★ 返回值 `ok:true` ≠ 效果发生了。** 改完要**再看一次装配**确认。
 
