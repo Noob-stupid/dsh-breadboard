@@ -17,7 +17,10 @@
   "types": "./lib/types/index.d.ts",
   "files": [
     "lib",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "skill",
+    "docs",
+    "models"
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {
