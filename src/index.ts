@@ -297,9 +297,19 @@ export function apply(ctx: AppContext, config: Config): void {
    */
   void (async () => {
     try {
-      const skills = (ctx as { skills?: { register: (input: unknown) => () => void } }).skills
+      // ⚠️⚠️ 用 `ctx.get('skills')` 而**不是** `ctx.skills` —— 这不是风格问题：
+      //   前两版我写的是 `ctx.skills`，而 `skills` **不在下面那个 `inject` 列表里**
+      //   ⇒ Cordis 没注入它 ⇒ `ctx.skills` 是 `undefined` ⇒ 代码静默走了"没有 skills 服务"
+      //   的分支 ⇒ **Skill 一直没注册上，而插件看起来一切正常**。
+      //   ★ 这正是本项目失败族里那条"看起来正常实际全错"。
+      // ★ 也**不把 `skills` 加进 `inject`**：那是硬依赖，会让插件在没装 skill 服务的
+      //   宿主上**整个起不来** —— 而 skill 只是锦上添花。按本文件既有的约定
+      //   （见上面 `inject` 的注释），可选服务走 `ctx.get()`，缺失时**可见地降级**。
+      const skills = (ctx as unknown as { get?: (key: string) => unknown }).get?.('skills') as
+        | { register: (input: unknown) => () => void }
+        | undefined
       if (skills === undefined) {
-        log('未注册 Skill：这个 profile 里没有 skills 服务') // 不是错误，只是这项能力不可用
+        log('未注册 Skill：这个宿主没有 skills 服务（插件其余功能不受影响）')
         return
       }
       const { readFile } = await import('node:fs/promises')
@@ -315,7 +325,12 @@ export function apply(ctx: AppContext, config: Config): void {
         warn(`Skill 注册跳过：${skillFile} 缺 description 或正文`)
         return
       }
-      skills.register({ name, description, content })
+      // ★ `source: 'bundled'` 是**必填**，而且语义正好对：它随插件发出去，
+      //   界面上就该显示成「插件自带」。
+      //   ⚠️ 漏了它的报错是 `loaded skill "..." source must be a string` ——
+      //     报错说的是"要是字符串"，而真正的问题是**这个字段没给**。
+      //     这类"报错文本指向用法、实际问题在缺失"的情况，靠读代码比靠读报错快。
+      skills.register({ name, description, content, source: 'bundled' })
       log(`已注册 Skill：${name}（${String(content.length)} 字）`)
     } catch (error) {
       // ★ 注册失败**不影响插件本体**，但必须说出来
