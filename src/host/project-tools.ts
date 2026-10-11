@@ -32,10 +32,10 @@ import {
   type ProjectStatus,
 } from '../contracts/projects.ts'
 import type { NetworkDeviceSnapshot } from '../contracts/network.ts'
-import { text, type HardwareToolDefinition } from './tools.ts'
+import { asRecord, text, type HardwareToolDefinition } from './tools.ts'
 import type { NetworkRegistry } from '../core/sim/network-registry.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
-import type { ProjectStore } from '../core/projects/store.ts'
+import { validateProjectProfile, type ProjectStore } from '../core/projects/store.ts'
 
 export interface ProjectToolDeps {
   readonly state: AssemblyState
@@ -314,6 +314,81 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
           wires: project.wires.length,
           linkUp: link.up,
           missing: link.missing,
+        }
+      },
+    },
+
+    /* ── ③ ★ agent 建项目：按描述把一份图纸**存进用户的项目目录** ── */
+    {
+      name: 'hw_save_project',
+      description:
+        '**新建或覆盖一个软硬件项目**（存进用户的 `~/.dsh/dsh-hardware-sandbox/projects/`）。' +
+        '★ 这是"agent 按项目需求建项目"的入口：用户可以口述一个系统，你把它写成图纸存下来，' +
+        '之后用 hw_import_project 一键切换过去。' +
+        '★ 形状（与项目文件完全一致，导出再导入能原样回来）：\n' +
+        '{\n' +
+        '  id: "my-seat-node"            （小写字母/数字/连字符，最长 64 —— 它会变成文件名）\n' +
+        '  label: "我的座位节点"\n' +
+        '  description: "一句话说明"\n' +
+        '  parts: [{ id:"c1", hardwareModel:"esp32-seat-sensor", position:{x:0,y:0.006,z:0} }]\n' +
+        '  wires: [{ from:{componentId:"c2",portId:"OUT"}, to:{componentId:"c1",portId:"E4"} }]\n' +
+        '  networkComponentId: "c1"      （出网的那台，必须是 parts 里的）\n' +
+        '  network: { protocol:"zhizuo-sensor", endpoint:"http://127.0.0.1:5800", deviceId:"AA:BB:..." }\n' +
+        '  link: { requires:["registered","config","reported","reporting"] }   ← **必填**\n' +
+        '}\n' +
+        '★ `position` 单位是**米**，是器件**包围盒中心**；`portId` 是 `E4` 这种**身份**，' +
+        '不是 `GPIO23` 那种丝印（用 hw_get_assembly 看现有装配里的 id）。' +
+        '★ `link.requires` **必须写**：它说明"怎么算这个项目连上了"（智座是四项全满足）。' +
+        '不写就没法判断通没通 —— 校验会直接拒绝，而不是给个默认值假装它是通的。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          project: {
+            type: 'object',
+            additionalProperties: true,
+            description: '完整的项目图纸，见工具描述里的形状。',
+          },
+        },
+        required: ['project'],
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean' },
+            projectId: { type: 'string' },
+            reason: { type: 'string' },
+          },
+          required: ['ok', 'projectId'],
+        },
+        render: (_args, value) => {
+          const result = asRecord(value)
+          if (result.ok !== true) {
+            return text(`项目没存下来：${String(result.reason ?? '未知原因')}`)
+          }
+          return text(
+            `已保存项目 ${String(result.projectId)}。` +
+              '用 hw_list_projects 看它、hw_import_project 切换过去。',
+          )
+        },
+      },
+      execute: async (args) => {
+        const input = asRecord(args)
+        const raw = input.project
+        // ★★ **与界面导入走同一条校验** —— 不另立一份。
+        //   两条路各校各的，迟早一条收得下、另一条收不下，而用户看到的是
+        //   "同一个文件，界面能导、agent 不能"（或反过来），没人知道差在哪。
+        const checked = validateProjectProfile(raw)
+        if (!checked.ok) {
+          return { ok: false, projectId: '', reason: checked.reason }
+        }
+        try {
+          await projects.save(checked.profile)
+          return { ok: true, projectId: checked.profile.id }
+        } catch (error) {
+          return { ok: false, projectId: checked.profile.id, reason: String(error) }
         }
       },
     },
