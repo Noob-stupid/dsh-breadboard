@@ -16,7 +16,7 @@
  * ★ 铁律②：面板被切走 → rAF 停、场景不再重建，但**宿主侧仿真照跑**（SSOT 在宿主）。
  */
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
-import { MODEL_ROUTES } from '../contracts/protocol.ts'
+import { HTTP_ROUTES, MODEL_ROUTES } from '../contracts/protocol.ts'
 import type { ImportModelResult, ImportedModelRecord } from '../contracts/protocol.ts'
 import { SceneHost } from '../scene/host.ts'
 import { PortTooltip } from './port-tooltip.ts'
@@ -34,7 +34,7 @@ import {
   NoticeBar,
   type ContextMenuItem,
 } from './hud.ts'
-import { ProjectPanel } from './project-panel.ts'
+import { ProjectPanel, type ProjectScanReport } from './project-panel.ts'
 import { sendToCurrentSession } from './session-chat.ts'
 import type { SessionsFace } from './slots.ts'
 
@@ -67,6 +67,13 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
   /** 宿主快照到手前禁用「添加」，否则动作会打空。 */
   const [ready, setReady] = useState(false)
   const [records, setRecords] = useState<readonly ImportedModelRecord[]>([])
+  /**
+   * **项目本体扫描报告** —— 用户工作流第②步的产物。
+   *
+   * ★ 扫了不显示等于没扫；而且"缺哪些型号"必须**点名** ——
+   *   那正是"写个清单发给用户 / 自己建模"的输入。
+   */
+  const [scanReport, setScanReport] = useState<ProjectScanReport | undefined>(undefined)
   /**
    * 宿主是否具备聊天能力（`capabilities.chat`）。
    *
@@ -388,16 +395,67 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           void channelRef.current?.dispatch({ kind: 'import_project', projectId }),
         disabled: !ready,
         revision: channelRef.current?.latest()?.revision ?? 0,
-        // ★ 建模导入复用 ② 的 handleImport —— 两条路各写一份，
-        //   迟早一个能存一个不能（而"能不能存"用户一眼就能看出来）
-        onImportModel: async (modelKey, file) => {
+        // ★ **导入项目本体** —— 一个完整的前后端项目文件夹（如 D:\MAX_xiangmu）
+        //   收整个文件夹的清单，交给宿主**扫描出它需要哪些硬件**。
+        onImportProjectFolder: async (files) => {
+          // ⚠️ 只挑**小而关键**的文本文件送去扫：把整个文件夹（可能带 node_modules）
+          //   灌过去既慢，又会把"这个项目需要什么硬件"淹在噪声里。
+          const interesting = files.filter(
+            (file) =>
+              file.size <= 512 * 1024 &&
+              !file.webkitRelativePath.includes('node_modules/') &&
+              !file.webkitRelativePath.includes('.git/') &&
+              /\.(ini|md|txt|json|ya?ml|py|c|cpp|h|hpp|toml|cfg|conf|env)$/i.test(file.name),
+          )
+          const sample = await Promise.all(
+            interesting.slice(0, 400).map(async (file) => ({
+              path: file.webkitRelativePath || file.name,
+              text: (await file.text()).slice(0, 20_000),
+            })),
+          )
+          const response = await fetch(HTTP_ROUTES.projects, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ op: 'scan-project', files: sample }),
+          })
+          const body = (await response.json()) as {
+            ok?: boolean
+            reason?: string
+            report?: {
+              fileCount: number
+              matched: { modelKey: string; label: string; hasGeometry: boolean; evidence: string[] }[]
+              missingGeometry: string[]
+            }
+          }
+          if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
+          // ★ 把报告**显示出来** —— 扫了不显示等于没扫。
+          //   而且缺的型号要**点名**：那正是"写个清单发给用户 / 自己建模"的输入。
+          if (body.report !== undefined) {
+            setScanReport(body.report)
+          }
+          return undefined
+        },
+        // ★ **导入建模组** —— 一个文件夹，里面按型号分（`<型号键>/model.glb`）
+        onImportModelSet: async (files) => {
           const registry = registryRef.current
           if (!registry) return '模型库还没就绪'
-          const result = await registry.upload(modelKey, file)
+          // 从相对路径里取**第一段**作为型号键：
+          //   建模组/hc-sr501/model.glb → 键 = hc-sr501
+          const picked = files.filter((file) => /\.(glb|gltf)$/i.test(file.name))
+          if (picked.length === 0) return '这个文件夹里没有 .glb / .gltf'
+          let done = 0
+          for (const file of picked) {
+            const segments = (file.webkitRelativePath || file.name).split('/')
+            const modelKey = segments.length >= 2 ? (segments[segments.length - 2] ?? '') : ''
+            if (modelKey === '') continue
+            const result = await registry.upload(modelKey, file)
+            if (!result.ok) return `${modelKey}：${result.reason ?? '未知原因'}`
+            providerRef.current?.invalidate(modelKey)
+            syncRef.current?.rebuildModel(modelKey)
+            done += 1
+          }
           setRecords([...registry.list()])
-          if (!result.ok) return result.reason ?? '未知原因'
-          providerRef.current?.invalidate(modelKey)
-          syncRef.current?.rebuildModel(modelKey)
+          pushNotice({ text: `建模组已导入 ${String(done)} 个型号`, severity: 'info' })
           return undefined
         },
       }),

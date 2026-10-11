@@ -17,6 +17,7 @@ import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 import type { ProjectStatus } from '../contracts/projects.ts'
+import { HARDWARE_MODELS } from '../contracts/library.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import type { HardwareEventBus } from '../core/events.ts'
 import type { ModelStore } from '../core/models/store.ts'
@@ -128,6 +129,80 @@ export interface RouteDeps {
     readonly saveScene: (projectId: string) => Promise<string | undefined>
     readonly remove: (projectId: string) => Promise<boolean>
   }
+}
+
+/**
+ * **扫描项目本体，得出它"看起来需要哪些硬件"**。
+ *
+ * ★★ 用户的工作流第②步：
+ *   > 导入项目后可以**扫描看看项目需求硬件建模**，根据这个干建模，
+ *   > 如果网上有建模自己导入不了就**写个清单发给用户**，没有就**自己建模没有的部分**
+ *
+ * ⚠️⚠️ **它只出报告，不生成装配。** 装配该怎么接是**看代码后决定的** ——
+ *   猜出来的装配会有"看起来对但接错了"的风险，而它**不会报错**
+ *   （本项目失败族里最贵的那一类）。
+ *
+ * ★ 匹配靠**词表**而不是智能推断：词表是**可审计的** ——
+ *   报告里会带上"在哪几个文件里看到的"，用户能自己判断对不对。
+ *   纯推断给不出证据，而**没有证据的结论在这里等于没有结论**。
+ */
+async function scanProjectNeeds(
+  files: readonly { path?: unknown; text?: unknown }[],
+  models: ModelStore | undefined,
+): Promise<{
+  readonly fileCount: number
+  readonly matched: readonly {
+    readonly modelKey: string
+    readonly label: string
+    readonly hasGeometry: boolean
+    readonly evidence: readonly string[]
+  }[]
+  readonly missingGeometry: readonly string[]
+}> {
+  // 型号键 → 常见写法（小写匹配）。★ 词表**故意写窄**：
+  //   宁可漏报（用户自己看代码能补），也不要误报（那会让他去装不需要的东西）。
+  const ALIASES: Readonly<Record<string, readonly string[]>> = {
+    'esp32-seat-sensor': ['esp32dev', 'esp32 devkit', 'esp32-devkit', 'esp32', 'platformio.ini'],
+    'hc-sr501': ['hc-sr501', 'hc_sr501', 'hcsr501', 'hc-sr501', 'pir', '红外', '人体感应'],
+    bme280: ['bme280', 'bmp280'],
+    'rpi-4b': ['raspberry pi', '树莓派', 'rpi-4', 'rpi4'],
+    mpl3115a2: ['mpl3115'],
+    mpr121: ['mpr121'],
+    'led-5v': ['led'],
+    breadboard: ['面包板', 'breadboard'],
+  }
+
+  const lower = files.map((file) => ({
+    path: typeof file.path === 'string' ? file.path : '?',
+    text: typeof file.text === 'string' ? file.text.toLowerCase() : '',
+  }))
+
+  const matched: {
+    modelKey: string
+    label: string
+    hasGeometry: boolean
+    evidence: string[]
+  }[] = []
+  const missingGeometry: string[] = []
+  for (const [modelKey, words] of Object.entries(ALIASES)) {
+    const evidence: string[] = []
+    for (const word of words) {
+      for (const file of lower) {
+        if (file.text.includes(word) && !evidence.includes(file.path)) evidence.push(file.path)
+      }
+      if (evidence.length >= 3) break
+    }
+    if (evidence.length === 0) continue
+    const hasGeometry = models === undefined ? false : (await models.get(modelKey)) !== undefined
+    matched.push({
+      modelKey,
+      label: HARDWARE_MODELS[modelKey]?.label ?? modelKey,
+      hasGeometry,
+      evidence: evidence.slice(0, 3),
+    })
+    if (!hasGeometry) missingGeometry.push(modelKey)
+  }
+  return { fileCount: files.length, matched, missingGeometry }
 }
 
 /** POST body 上限，防止超大请求打爆内存。 */
@@ -298,7 +373,7 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
               const op = typeof body.op === 'string' ? body.op : ''
               const projectId = typeof body.projectId === 'string' ? body.projectId : ''
               // ★ save 的 id 在图纸里（profile.id），不要求单独传 projectId
-              if (op !== 'save' && projectId === '') {
+              if (op !== 'save' && op !== 'scan-project' && projectId === '') {
                 sendJson(res, 400, { ok: false, reason: '缺少 projectId' })
                 return
               }
@@ -326,6 +401,22 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
                   ok: reason === undefined,
                   ...(reason === undefined ? {} : { reason }),
                 })
+                return
+              }
+              if (op === 'scan-project') {
+                // ★★ **扫描项目本体，得出它需要哪些硬件** —— 用户的工作流第②步：
+                //   "导入项目后可以扫描看看项目需求硬件建模，根据这个干建模"
+                //
+                // ⚠️ 它**不创建项目**：扫描的结果是**一份需求报告**（哪些型号有几何、
+                //   哪些缺），而不是一份可以直接跑的装配 —— 装配该怎么接是**用户/agent
+                //   看代码后决定的**，我们猜不出来。猜出来的装配会有"看起来对但接错了"的
+                //   风险，而它**不会报错**。
+                const scanned = Array.isArray(body.files) ? body.files : []
+                const report = await scanProjectNeeds(
+                  scanned as { path?: unknown; text?: unknown }[],
+                  deps.models,
+                )
+                sendJson(res, 200, { ok: true, report })
                 return
               }
               if (op === 'delete') {

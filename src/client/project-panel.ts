@@ -29,11 +29,41 @@ import { createElement as h } from 'react'
 
 import { HTTP_ROUTES } from '../contracts/protocol.ts'
 import type { ProjectStatus } from '../contracts/projects.ts'
-import { HARDWARE_MODELS } from '../contracts/library.ts'
 import { Panel } from './hud.ts'
 
-/** 模型库里的全部型号键 —— 建模导入时要选"给哪个型号换装"。 */
-const modelKeys: readonly string[] = Object.keys(HARDWARE_MODELS)
+/**
+ * 一个**建模组**里挑出来的、要送进模型库的文件。
+ *
+ * ★ 布局与插件自己的 `models/` 目录**同一套**：
+ *   `<建模组>/<型号键>/model.glb` —— 子文件夹名就是型号键。
+ *   ⇒ "导出建模组"与"导入建模组"是同一套布局的往返，**不需要另定格式**。
+ */
+export interface ModelSetFile {
+  /** 型号键（子文件夹名）。 */
+  readonly modelKey: string
+  readonly file: File
+}
+
+/**
+ * **项目本体扫描报告** —— 导入项目文件夹后，宿主扫出来的"它需要哪些硬件"。
+ *
+ * ★★ 用户工作流第②步的产物：
+ *   > 导入项目后可以**扫描看看项目需求硬件建模**，根据这个干建模，
+ *   > 如果网上有建模自己导入不了就**写个清单发给用户**，没有就**自己建模没有的部分**
+ *
+ * ★ `evidence` 是**在哪几个文件里看到的** —— 有了它用户才能自己判断对不对。
+ *   没有证据的结论在这里等于没有结论。
+ */
+export interface ProjectScanReport {
+  readonly fileCount: number
+  readonly matched: readonly {
+    readonly modelKey: string
+    readonly label: string
+    readonly hasGeometry: boolean
+    readonly evidence: readonly string[]
+  }[]
+  readonly missingGeometry: readonly string[]
+}
 
 export interface ProjectPanelProps {
   /** 切换到这个项目（走 `import_project` 动作，与工具同一条路）。 */
@@ -42,14 +72,27 @@ export interface ProjectPanelProps {
   /** 装配 revision —— 变了就重新拉一次状态（导入之后连通性会变）。 */
   readonly revision: number
   /**
-   * **给某个型号导入 3D 几何**（.glb / .gltf）。
+   * **导入项目本体**：一个**完整的前后端项目文件夹**（如 `D:\MAX_xiangmu`）。
    *
-   * ★ 与「导入项目」分开是用户明确要的（"要两个分开的按钮"）：
-   *   项目 = 接哪个软件系统；建模 = 某个型号长什么样。
-   *   两边都是文件，界面必须一眼分得开。
+   * ★★ 用户原话：
+   *   > 导入项目肯定是**完整前后端那个完整项目文件夹**啊
+   *   > 就是类似**先导入不带建模的 MAX_xiangmu 本体**
+   *
+   *   ⇒ 收的是**整个文件夹的文件清单**，由宿主**扫描出它需要哪些硬件**。
+   *     ⚠️ 第一版把它做成了"选一个 .json" —— **根本性的理解错误**：
+   *       项目本体是**一个真实项目**，不是我们编的一份配置文件。
    * 返回**人话原因**（`undefined` = 成功）。
    */
-  readonly onImportModel: (modelKey: string, file: File) => Promise<string | undefined>
+  readonly onImportProjectFolder: (files: readonly File[]) => Promise<string | undefined>
+  /**
+   * **导入建模组**：一个文件夹，里面按型号分（`<型号键>/model.glb`）。
+   *
+   * ★ 用户原话：「导入建模肯定是**已经保存好的完整建模组**啊」
+   *   —— 不是单个 `.glb`，是**一组**。
+   */
+  readonly onImportModelSet: (files: readonly File[]) => Promise<string | undefined>
+  /** 项目本体扫描报告（导入项目文件夹后才有）。 */
+  readonly scanReport?: ProjectScanReport
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -79,7 +122,6 @@ export function ProjectPanel(props: ProjectPanelProps) {
   const [nonce, setNonce] = useState(0)
   const [busy, setBusy] = useState<string | undefined>(undefined)
   /** 建模导入的目标型号（select 的当前值）。 */
-  const [targetKey, setTargetKey] = useState<string>(modelKeys[0] ?? '')
 
   const run = (op: 'import-sample' | 'delete' | 'save-scene', projectId: string): void => {
     setBusy(`${op}:${projectId}`)
@@ -288,6 +330,47 @@ export function ProjectPanel(props: ProjectPanelProps) {
   // ★ 用原生 file input 而不是自绘一个"路径输入框"：
   //   自绘那个在浏览器里**拿不到真实路径**（安全限制），最后还是要用户手打路径 ——
   //   而手打路径正是"看着能用其实用不了"的典型。
+  // ★★ **扫描报告** —— 用户工作流第②步的产物，必须显示出来（扫了不显示等于没扫）
+  if (props.scanReport !== undefined) {
+    const report = props.scanReport
+    body.push(
+      h(
+        'div',
+        {
+          key: '__scan',
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            padding: '7px',
+            borderRadius: '6px',
+            background: 'rgba(24, 40, 32, 0.9)',
+            border: '1px solid rgba(120, 200, 150, 0.3)',
+            fontSize: '11px',
+            lineHeight: 1.5,
+          },
+        },
+        h('div', { style: { fontWeight: 600 } }, `扫描了 ${String(report.fileCount)} 个文件，这个项目看起来需要：`),
+        ...report.matched.map((item) =>
+          h(
+            'div',
+            { key: item.modelKey, title: `证据（在哪几个文件里看到的）：${item.evidence.join('、')}` },
+            `${item.hasGeometry ? '✅' : '❌'} ${item.label}（${item.modelKey}）` +
+              (item.hasGeometry ? '' : ' —— 还没有几何'),
+          ),
+        ),
+        report.missingGeometry.length > 0
+          ? h(
+              'div',
+              { style: { marginTop: '3px', color: '#ffc46b' } },
+              `缺几何的：${report.missingGeometry.join('、')}` +
+                ' —— 网上有就导入建模组；没有就让 agent 按这个清单建模。',
+            )
+          : h('div', { style: { marginTop: '3px', color: '#7ee0a0' } }, '需要的型号都已有几何 ✓'),
+      ),
+    )
+  }
+
   body.push(
     h(
       'div',
@@ -301,7 +384,20 @@ export function ProjectPanel(props: ProjectPanelProps) {
           borderTop: '1px solid rgba(120, 140, 170, 0.18)',
         },
       },
-      // ── ① 导入**项目**（.json 项目定义）──
+      // ── ① 导入**项目本体**（一个文件夹，如 `D:\MAX_xiangmu`）──
+      //
+      // ★★ 用户原话：
+      //
+      //   > **导入项目肯定是完整前后端那个完整项目文件夹啊**
+      //   > 你懂吗，就是类似**先导入不带建模的 MAX_xiangmu 本体**
+      //
+      //   ⇒ 选的**不是** `.json`，是**真实项目文件夹**（前后端 + 硬件代码都在里面）。
+      //     它**不带建模** —— 建模是另一件事，由「导入建模组」负责。
+      //
+      // ★ 扫描的原料：`webkitdirectory` 会给出**相对路径 + 文件内容**。
+      //   我们只挑**小而关键**的文本文件（配置 / 源码 / 文档）送过去扫，
+      //   而不是把整个文件夹（可能带 node_modules）灌进去 ——
+      //   那既慢，又会把"这个项目需要什么硬件"淹在噪声里。
       h(
         'label',
         {
@@ -316,107 +412,83 @@ export function ProjectPanel(props: ProjectPanelProps) {
             cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
           },
           title:
-            '导入一个**项目定义**（.json）：它描述这套硬件接哪个软件系统、有哪些器件、怎么接线。\n' +
-            '格式：{ "id", "label", "parts": [...], "wires": [...], "networkComponentId", "network", "link" }',
+            '选一个**完整的项目文件夹**（前后端 + 硬件代码，如 D:\\MAX_xiangmu）。\n' +
+            '它**不带建模** —— 导入后会扫描出"这个项目需要哪些硬件"，再配建模。',
         },
-        busy === 'save:file' ? '导入中…' : '＋ 导入项目（.json 项目定义）',
+        busy === 'project:dir' ? '扫描中…' : '＋ 导入项目本体（选文件夹）',
         h('input', {
           type: 'file',
-          accept: '.json,application/json',
+          webkitdirectory: 'true',
+          directory: 'true',
+          multiple: true,
           disabled: props.disabled || busy !== undefined,
           style: { display: 'none' },
           onChange: (event: { target?: { files?: FileList | null } }) => {
-            const file = event.target?.files?.[0]
-            if (file === undefined) return
-            setBusy('save:file')
-            void file
-              .text()
-              .then((text) => {
-                let parsed: unknown
-                try {
-                  parsed = JSON.parse(text)
-                } catch {
-                  setBusy(undefined)
-                  setFailure(`导入失败：${file.name} 不是合法 JSON`)
-                  return
-                }
-                const box = parsed as { profile?: unknown }
-                return callProjects('save', '', box.profile ?? parsed)
-              })
-              .then((error) => {
-                setBusy(undefined)
-                if (error !== undefined) setFailure(`导入失败：${error}`)
-                else setNonce((n) => n + 1)
-              })
+            const files = Array.from(event.target?.files ?? [])
+            if (files.length === 0) return
+            setBusy('project:dir')
+            void props.onImportProjectFolder(files).then((error) => {
+              setBusy(undefined)
+              if (error !== undefined) setFailure(`项目导入失败：${error}`)
+              else setNonce((n) => n + 1)
+            })
           },
         }),
       ),
-      // ── ② 导入**建模**（.glb / .gltf）──
+      // ── ② 导入**建模组**（一个文件夹，里面按型号分）──
       //
-      // ★★ 用户原话：「**要两个分开的按钮**」
-      //   原来只有一个「导入项目」，提示里还写着"选一个 .json 文件" ——
-      //   用户**分不清那是项目还是模型**（两边都是文件、都是 json）。
-      //   ⇒ 项目与建模是**两件不同的事**，界面必须一眼分得开。
+      // ★★ 用户原话：「**导入建模肯定是已经保存好的完整建模组啊**」
+      //   —— 不是单个 `.glb`，是**一组**。
       //
-      // ★ 建模需要先选**给哪个型号**：模型库里每个型号是一个**固定的键**
-      //   （`hc-sr501` / `esp32-seat-sensor` …），几何是**挂在键上**的。
-      //   不选键就不知道该挂给谁 —— 而"随便找个键挂上"会让**别的型号悄悄变样**。
+      // ★ 所以选的是**文件夹**（`webkitdirectory`），布局与插件自己的
+      //   `models/` 目录**同一套**：
+      //
+      // ```
+      //   我的建模组/
+      //     hc-sr501/         ← 子文件夹名 = 型号键
+      //       model.glb
+      //     esp32-seat-sensor/
+      //       model.glb
+      // ```
+      //
+      //   ⇒ "导出建模组"与"导入建模组"就是同一套布局的往返，**不需要另定格式**。
       h(
-        'div',
-        { style: { display: 'flex', gap: '5px', alignItems: 'center' } },
-        h(
-          'select',
-          {
-            value: targetKey,
-            disabled: props.disabled || busy !== undefined,
-            onChange: (event: { target?: { value?: string } }) =>
-              setTargetKey(event.target?.value ?? ''),
-            style: {
-              flex: '1',
-              minWidth: '0',
-              padding: '4px',
-              borderRadius: '6px',
-              border: '1px solid rgba(120, 140, 170, 0.3)',
-              background: 'rgba(20, 26, 36, 0.95)',
-              color: 'inherit',
-              font: 'inherit',
-              fontSize: '11px',
-            },
+        'label',
+        {
+          style: {
+            display: 'block',
+            textAlign: 'center',
+            padding: '6px 8px',
+            borderRadius: '6px',
+            border: '1px dashed rgba(120, 140, 170, 0.45)',
+            background: 'rgba(30, 38, 50, 0.9)',
+            fontSize: '11px',
+            cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
           },
-          ...modelKeys.map((key) => h('option', { key, value: key }, key)),
-        ),
-        h(
-          'label',
-          {
-            style: {
-              padding: '5px 8px',
-              borderRadius: '6px',
-              border: '1px dashed rgba(120, 140, 170, 0.45)',
-              background: 'rgba(30, 38, 50, 0.9)',
-              fontSize: '11px',
-              whiteSpace: 'nowrap',
-              cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
-            },
-            title: '给左边选中的型号导入 **3D 几何**（.glb / .gltf）。这是"建模"，与"项目"是两回事。',
+          title:
+            '选一个**建模组文件夹**：里面每个子文件夹名 = 型号键，子文件夹里放模型（.glb / .gltf）。\n' +
+            '例：我的建模组/hc-sr501/model.glb、我的建模组/esp32-seat-sensor/model.glb',
+        },
+        busy === 'model:set' ? '导入中…' : '＋ 导入建模组（选文件夹）',
+        h('input', {
+          type: 'file',
+          // ★ `webkitdirectory` 让选择框变成**选目录**而不是选文件
+          webkitdirectory: 'true',
+          directory: 'true',
+          multiple: true,
+          disabled: props.disabled || busy !== undefined,
+          style: { display: 'none' },
+          onChange: (event: { target?: { files?: FileList | null } }) => {
+            const files = Array.from(event.target?.files ?? [])
+            if (files.length === 0) return
+            setBusy('model:set')
+            void props.onImportModelSet(files).then((error) => {
+              setBusy(undefined)
+              if (error !== undefined) setFailure(`建模组导入失败：${error}`)
+              else setNonce((n) => n + 1)
+            })
           },
-          busy === 'model:file' ? '导入中…' : '＋ 导入建模（.glb）',
-          h('input', {
-            type: 'file',
-            accept: '.glb,.gltf,model/gltf-binary,model/gltf+json',
-            disabled: props.disabled || busy !== undefined || targetKey === '',
-            style: { display: 'none' },
-            onChange: (event: { target?: { files?: FileList | null } }) => {
-              const file = event.target?.files?.[0]
-              if (file === undefined || targetKey === '') return
-              setBusy('model:file')
-              void props.onImportModel(targetKey, file).then((error) => {
-                setBusy(undefined)
-                if (error !== undefined) setFailure(`建模导入失败：${error}`)
-                else setNonce((n) => n + 1)
-              })
-            },
-          }),
-        ),
+        }),
       ),
     ),
   )
