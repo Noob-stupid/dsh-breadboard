@@ -46,7 +46,7 @@ import {
   type SubprocessLike,
 } from './host/subprocess-spawner.ts'
 import { restingY } from './contracts/library.ts'
-import { MODEL_MAX_BYTES, type HostCapabilities } from './contracts/protocol.ts'
+import { MODEL_MAX_BYTES, PLUGIN_PACKAGE_NAME, type HostCapabilities } from './contracts/protocol.ts'
 
 /**
  * 宿主能力面。
@@ -80,7 +80,11 @@ interface WebSearchLike {
   }>
 }
 
-export const name = '@noob-stupid/dsh-breadboard'
+/**
+ * 插件名 = **npm 包名**，唯一出处是 `contracts/protocol.ts` 的 `PLUGIN_PACKAGE_NAME`
+ * （前端半的 Star 钩子用它判断"这一页是不是本插件"，两边必须是同一个字面量）。
+ */
+export const name = PLUGIN_PACKAGE_NAME
 
 /**
  * 需要宿主提供的服务。

@@ -13,6 +13,17 @@ import type { AssemblySnapshot, HardwareEvent, Vec3 } from './assembly.ts'
 export const ROUTE_PREFIX = '/@noob-stupid/dsh-breadboard' as const
 
 /**
+ * 本插件的**包名**（npm 身份，与 `package.json` 的 `name` 逐字相同）。
+ *
+ * ★ 为什么要有这个常量：宿主半（`src/index.ts` 的 `name`）与前端半
+ *   （Star 钩子判断"这一页是不是本插件"）**都要用它**，而两边是两个 realm ——
+ *   各写一份字面量就是"两份需要手工同步的分叉面"（本文件头上刚说过不要这样）。
+ *   改名时只改这里一处；`tests/star-hook.test.ts` 会拿它对 `package.json` 核对，
+ *   分叉了会红，而不是静默不显示。
+ */
+export const PLUGIN_PACKAGE_NAME = '@noob-stupid/dsh-breadboard' as const
+
+/**
  * HTTP 路由（`ctx.webServer.register`）。
  *
  * ★ 唯一出处就是本文件。前端 `src/scene/endpoints.ts` 用

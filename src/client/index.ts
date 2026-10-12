@@ -8,6 +8,9 @@
  *   否则点了图标中央列不会派发。
  * · `main` 是 root 作用域 **keyed** 槽，注册需 `{ key }`；含义「Central panel selected by sidebar entry id」。
  *   已占 key：conversation / plugins / schedules / connection-panel / task-board —— 我们取 `breadboard`。
+ * · `plugins.detail.section` 是 **list** 槽（官方 `dsh-client-ui-plugin-manager` 的插件详情页声明的），
+ *   注册需 `{ id, order }`，owner props 是 `{ subject }`；渲染成该页 `.detailSections` 的**最后一个
+ *   子节点** ⇒ 页面内容最下方。本插件用它挂**自己的** Star 钩子（见 `star-hook.ts`）。
  * · 组件契约是 **React 函数组件** `SlotComponent<P> = (props: P) => ReactNode`。
  *   （scaffold 生成的 `() => ({ render() {} })` 形状**不符合**该契约，已按契约重写。）
  *
@@ -19,6 +22,7 @@
 import { PANEL_ID } from '../scene/endpoints.ts'
 import { HardwareSandboxIcon } from './icon.ts'
 import { HardwareSandboxPanel } from './panel.ts'
+import { StarRow } from './star-hook.ts'
 import type { ClientContext, SessionsFace } from './slots.ts'
 
 /**
@@ -84,5 +88,31 @@ export function apply(ctx: ClientContext): void {
     'breadboard: main panel',
   )
 
-  ctx.logger?.info?.('[dsh-breadboard] client 半已注册 sidebar.panellist + main（key=' + PANEL_ID + '）')
+  // ③ 官方**插件详情页**底部的 Star 钩子。
+  //
+  // ★ 落点：该页把 `plugins.detail.section` 渲染成 `.detailSections` 的**最后一个子节点**
+  //   ⇒ 本插件详情页的**内容最下方**（用户划的那块）。组件内部按 subject 认包名，
+  //   别的插件的页 / 官方 item 页返回 null。
+  //
+  // ★ 槽不存在（老框架没声明它）时 `inject` 只是**静默等待**，不会报错、不会拖垮插件
+  //   —— 所以这里可以无条件注册，不需要先探测。
+  //
+  // ⚠️ `register({` 同样写成一行：见上面 ① 的格式敏感正则说明。
+  ctx.effect(
+    () =>
+      ctx.slots.inject('plugins.detail.section', () =>
+        ctx.slots.register({
+          name: 'plugins.detail.section',
+          id: 'breadboard-star',
+          order: 100,
+        }, StarRow),
+      ),
+    'breadboard: plugin-detail star hook',
+  )
+
+  ctx.logger?.info?.(
+    '[dsh-breadboard] client 半已注册 sidebar.panellist + main（key=' +
+      PANEL_ID +
+      '）+ plugins.detail.section（star 钩子）',
+  )
 }
