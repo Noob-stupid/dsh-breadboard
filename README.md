@@ -20,9 +20,6 @@ Then reload the page. The sandbox registers into the **`main`** slot (the 3D vie
 **`sidebar.panellist`** slot (the panels); `skill/SKILL.md` ships with the plugin, so an agent
 that has it installed already knows how to drive it.
 
-**Like it?** [Give it a star on GitHub](https://github.com/Noob-stupid/dsh-breadboard) — the
-panel has the same hook in its bottom-right corner.
-
 Three things make that one line work — all three are in this repository:
 
 | Requirement | Where | Note |

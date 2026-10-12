@@ -19,8 +19,6 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 装完刷新页面即可。沙盒注册进 **`main`** 槽（3D 视图）与 **`sidebar.panellist`** 槽（各面板）；
 `skill/SKILL.md` 随插件一起注册，装了这个插件的 agent 已经知道该怎么用它。
 
-**喜欢的话**：到 [GitHub 点个 Star](https://github.com/Noob-stupid/dsh-breadboard) —— 面板右下角也有同一个入口。
-
 这一行能生效靠三件事，三件都在本仓库里：
 
 | 要求 | 位置 | 说明 |

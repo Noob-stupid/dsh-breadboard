@@ -174,8 +174,3 @@ hw_edit_assembly({kind:'import_project'})    切换项目 = 换整套硬件（�
 - `docs/04-失败族-看起来正常实际全错.md` —— 20 个实例 + 纪律
 - `docs/06-状态与交接.md` —— 当前状态、待办、断点
 - `src/contracts/library.ts` —— 型号表（有哪些型号键、每个几个脚）
-
----
-
-> **喜欢这个插件？** 可以到 GitHub 点个 Star：https://github.com/Noob-stupid/dsh-breadboard
-> （面板右下角也有同一个入口；点不点都不影响任何功能。）
