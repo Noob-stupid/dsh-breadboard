@@ -24,3 +24,5 @@ Thumbs.db
 # 临时
 *.log
 *.tmp
+# 打包产物（Release 附件，不入库）
+*.tgz
