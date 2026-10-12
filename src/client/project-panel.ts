@@ -354,7 +354,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
             disabled: props.disabled || busy !== undefined,
             onClick: () => run('save-scene', project.id),
             title:
-              '把**当前场景里这套装配**（器件位置、朝向、接线、联网绑定）存回这个项目。\n' +
+              '把当前场景里这套装配（器件位置、朝向、接线、联网绑定）存回这个项目。\n' +
               '存完可以点「导出（另存为…）」拿走文件。',
             style: {
               padding: '5px 8px',
@@ -625,8 +625,8 @@ export function ProjectPanel(props: ProjectPanelProps) {
             cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
           },
           title:
-            '选一个**完整的项目文件夹**（前后端 + 硬件代码，如 D:\\MAX_xiangmu）。\n' +
-            '它**不带建模** —— 导入后会扫描出"这个项目需要哪些硬件"，再配建模。',
+            '选一个完整的项目文件夹（前后端 + 硬件代码，如 D:\\MAX_xiangmu）。\n' +
+            '它不带建模 —— 导入后会扫描出"这个项目需要哪些硬件"，再配建模。',
         },
         busy === 'project:dir' ? '扫描中…' : '＋ 导入项目本体（选文件夹）',
         h('input', {
@@ -681,8 +681,8 @@ export function ProjectPanel(props: ProjectPanelProps) {
             cursor: props.disabled ? 'not-allowed' : 'pointer',
           },
           title:
-            '勾上：**只补缺** —— 已有几何的型号跳过不动（给 B 补缺口不会误伤 A）。\n' +
-            '不勾（默认）：**换装** —— 同键已有几何会被替换（你明确要换掉某个型号时才用）。',
+            '勾上：只补缺 —— 已有几何的型号跳过不动（给 B 补缺口不会误伤 A）。\n' +
+            '不勾（默认）：换装 —— 同键已有几何会被替换（你明确要换掉某个型号时才用）。',
         },
         h('input', {
           type: 'checkbox',
@@ -727,7 +727,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
               cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
             },
             title:
-              '把**当前模型库里的全部建模**打包成**一个 .json 文件**（几何以 base64 装在里面）。\n' +
+              '把当前模型库里的全部建模打包成一个 .json 文件（几何以 base64 装在里面）。\n' +
               '保存位置在弹出的对话框里选；下次用「导入建模组（.json）」即可原样导回。',
           },
           busy === 'model:export' ? '导出中…' : '⤓ 导出建模组（存成一个 .json）',

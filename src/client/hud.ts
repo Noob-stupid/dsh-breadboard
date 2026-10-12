@@ -576,13 +576,13 @@ export function SearchResults(props: SearchResultsProps) {
           'div',
           { style: { display: 'flex', flexDirection: 'column', gap: '7px' } },
           // ★ 没有候选时要说清**为什么**，否则用户看到空列表会以为坏了。
-          //   step.parts 收的是**板卡 / 模块 / 机械件**，裸芯片不在其中
+          //   step.parts 收的是板卡 / 模块 / 机械件，裸芯片不在其中
           //   （实测：BME280/DHT22/SHT31/MPU6050 全 0；Bosch 只有 LGA **焊盘封装**，不是实体元件）。
           result.candidates.length === 0
             ? createElement(
                 'div',
                 { style: { color: '#ffc266', opacity: 0.8, fontSize: '10px', lineHeight: 1.35 } },
-                '没有可一键导入的候选：step.parts 收的是**板卡 / 模块 / 机械件**，' +
+                '没有可一键导入的候选：step.parts 收的是板卡 / 模块 / 机械件，' +
                   '裸芯片（如 BME280）不在其中。请用下面的外链自行下载后点「导入」。',
               )
             : null,
