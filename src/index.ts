@@ -35,7 +35,7 @@ import { StepPartsClient } from './core/models/step-parts.ts'
 import { createRouteBundle, scanProjectNeeds, type HttpRoute, type UpgradeRoute } from './host/routes.ts'
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
-import { createProjectTools, projectStatuses } from './host/project-tools.ts'
+import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
 import type { ProjectStatus } from './contracts/projects.ts'
 import { createFetchTransport } from './host/fetch-transport.ts'
 import { createChatSender, type AgentsLike } from './host/chat.ts'
@@ -702,7 +702,9 @@ export function apply(ctx: AppContext, config: Config): void {
     // ★ 注册表就位 ⇒ 现在可以真算了
     projectStatusProvider = async () => {
       const { projects: profiles } = await projectStore.list()
-      return projectStatuses(state, networkRegistry, profiles)
+      // ★ 台账要"✅有几何 / ❌待建" ⇒ 必须带上模型库里已有几何的键集，
+      //   否则没法区分"这个型号还没建"和"建好了"
+      return projectStatuses(state, networkRegistry, profiles, await geometryKeys(models))
     }
 
     const networkRegistry = new NetworkRegistry({
@@ -730,7 +732,7 @@ export function apply(ctx: AppContext, config: Config): void {
         //   （器件 + 接线 + 联网绑定 + **连通判据**）
         //   ★ 放在同一个 try 里：它与联网工具共用 `networkRegistry`，
         //     注册失败要一起回滚，不能留下"一半装了"的状态。
-        for (const definition of createProjectTools({ registry: networkRegistry, state, projects: projectStore })) {
+        for (const definition of createProjectTools({ registry: networkRegistry, state, projects: projectStore, models })) {
           networkDisposers.push(toolRegistry.register(definition))
           registeredToolNames.push(definition.name)
         }

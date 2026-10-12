@@ -98,6 +98,23 @@ export interface ProjectProfile {
   readonly networkComponentId: string
   readonly network: NetworkBinding
   readonly link: ProjectLinkCheck
+  /**
+   * **这个项目需要哪些型号的建模**（"建模台账"）。
+   *
+   * ★★ 用户要的行为：**切换项目时建模跟着项目走** ——
+   *   A 项目 → A 的建模；切到 B → B 的建模；B 还没建 → **B 对应"空建模待建"**。
+   *
+   * ★ 但**几何本身仍存在全局库**（`models/<型号键>/`），不随项目切换：
+   *   `esp32-seat-sensor` 这种通用主控会被多个项目引用；存 N 份的话，
+   *   改了 A 的几何、B 还是旧的 ⇒ **"看起来对实际全错"**。
+   *   ⇒ 项目拥有的是"**需求清单**"，不是"几何副本"；库里没有的型号在界面上
+   *     显示为 **❌ 待建**（场景里是占位盒），并给出"去建 / 去导"的入口。
+   *
+   * ★ 省略时**由 `parts` 的型号去重推导** —— 这样"装配里已经有的"永远进台账，
+   *   不需要谁记得去登记。扫描（`op:'scan-body'`）的结果可以再**补充**它
+   *   （例如项目需要但装配里还没摆的型号）。
+   */
+  readonly requiredModels?: readonly string[]
 }
 
 /* ─────────────────────── 内置项目 ─────────────────────── */
@@ -177,6 +194,22 @@ export function projectIds(): readonly string[] {
 }
 
 /**
+ * 台账里的一项：**某个型号的建模有没有**。
+ */
+export interface ModelNeed {
+  readonly modelKey: string
+  /** 型号的人话名字（来自 `HARDWARE_MODELS`；查不到就回退成键名）。 */
+  readonly label: string
+  /**
+   * 全局模型库里**已经有几何**。
+   *
+   * ★ `false` 时场景里那个器件是**占位盒**（不是"看不见"，是"看着像但有假"）——
+   *   所以界面必须把"待建"说出来，而不是让用户以为那就是模型。
+   */
+  readonly hasGeometry: boolean
+}
+
+/**
  * 一个项目**当前**的状态 —— 给界面与工具用（运行态，不是图纸）。
  *
  * ★ 与 {@link ProjectProfile} 分开是有意的：那个是**装配图纸**（不会变），
@@ -194,6 +227,20 @@ export interface ProjectStatus {
   readonly missing: readonly string[]
   /** 人类可读的判据说明，键是判据名。 */
   readonly requirements: Readonly<Record<string, string>>
+  /**
+   * **建模台账** —— 这个项目要哪些型号的几何、现在有没有。
+   *
+   * ★★ 用户要的效果："**切成 B 项目，如果还没建模，那就是 B 项目对应空建模待建**"。
+   *   ⇒ 切换项目时看的**不是**全局模型库，而是这个项目的台账：
+   *     每一项要么 ✅ 有几何、要么 ❌ 待建，缺的给"去建/去导"的入口。
+   *
+   * ★ 型号集 = `requiredModels`（扫描补充过就用它）∪ `parts` 里出现的型号 ——
+   *   取并集是刻意的：**装配里已经摆着的**永远该进台账，
+   *   而扫描可能还额外发现"项目需要但还没摆上来"的。
+   */
+  readonly modelNeeds: readonly ModelNeed[]
+  /** 台账里 **❌ 待建**的型号键（给"缺什么"一个直接可用的清单）。 */
+  readonly missingModels: readonly string[]
   /**
    * **完整图纸**。
    *

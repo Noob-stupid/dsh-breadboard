@@ -28,14 +28,17 @@
 
 import {
   SAMPLE_PROJECTS,
+  type ModelNeed,
   type ProjectProfile,
   type ProjectStatus,
 } from '../contracts/projects.ts'
+import { HARDWARE_MODELS } from '../contracts/library.ts'
 import type { NetworkDeviceSnapshot } from '../contracts/network.ts'
 import { asRecord, text, type HardwareToolDefinition } from './tools.ts'
 import type { NetworkRegistry } from '../core/sim/network-registry.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import { validateProjectProfile, type ProjectStore } from '../core/projects/store.ts'
+import type { ModelStore } from '../core/models/store.ts'
 
 export interface ProjectToolDeps {
   readonly state: AssemblyState
@@ -48,6 +51,20 @@ export interface ProjectToolDeps {
    *   不会碰用户真实的项目。
    */
   readonly projects: ProjectStore
+  /**
+   * **模型库** —— 用来回答"这个型号有没有几何"（建模台账）。
+   *
+   * ★ 必传而不是可选：缺了它就没法说清 ✅/❌，只能**猜** ——
+   *   猜成"有几何"会让用户以为模型在（场景里其实是占位盒）；
+   *   猜成"没有"会让他白建一遍。**两种猜法都在骗人**，所以不给默认值。
+   */
+  readonly models: ModelStore
+}
+
+/** 模型库里**已经有几何**的型号键集合（台账的 ✅/❌ 依据）。 */
+export async function geometryKeys(models: ModelStore): Promise<ReadonlySet<string>> {
+  const records = await models.list()
+  return new Set(records.map((record) => record.modelKey))
 }
 
 /** 链接判据的**原始事实**（`ProjectProfile.link.requires` 从这里面挑）。 */
@@ -116,6 +133,8 @@ export function projectStatuses(
   state: AssemblyState,
   registry: NetworkRegistry,
   profiles: readonly ProjectProfile[],
+  /** 全局模型库里**已经有几何**的型号键。★ 必传：不传就没法说"待建"，那是撒谎。 */
+  modelsWithGeometry: ReadonlySet<string>,
 ): readonly ProjectStatus[] {
   const components = state.snapshot().components
   return profiles.map((project) => {
@@ -123,6 +142,14 @@ export function projectStatuses(
     const imported = project.parts.every((part) => components.some((c) => c.id === part.id))
     const snapshot = registry.deviceFor(project.networkComponentId)?.snapshot()
     const link = linkStateOf(project, snapshot)
+    // ★ 台账型号集 = `requiredModels`（扫描补充过）∪ `parts`（装配里已经摆着的）
+    const keys = new Set<string>(project.requiredModels ?? [])
+    for (const part of project.parts) keys.add(part.hardwareModel)
+    const modelNeeds: ModelNeed[] = [...keys].map((modelKey) => ({
+      modelKey,
+      label: HARDWARE_MODELS[modelKey]?.label ?? modelKey,
+      hasGeometry: modelsWithGeometry.has(modelKey),
+    }))
     return {
       id: project.id,
       label: project.label,
@@ -131,6 +158,8 @@ export function projectStatuses(
       linkUp: imported && link.up,
       missing: link.missing,
       requirements: LINK_LABEL,
+      modelNeeds,
+      missingModels: modelNeeds.filter((need) => !need.hasGeometry).map((need) => need.modelKey),
       // ★ 带上完整图纸：界面要能**导出**（用户："这个也能选择路径保存"）
       profile: project,
     }
@@ -138,7 +167,7 @@ export function projectStatuses(
 }
 
 export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinition[] {
-  const { state, registry, projects } = deps
+  const { state, registry, projects, models } = deps
 
   /** 导入一个项目：按图纸放器件、连线、挂联网绑定。 */
   const importProject = (project: ProjectProfile): { ok: boolean; reason?: string; placed: string[] } => {
@@ -226,7 +255,10 @@ export function createProjectTools(deps: ProjectToolDeps): HardwareToolDefinitio
       //   必须来自同一份计算，各算各的迟早会一个说通一个说没通，而没人知道信谁。
       execute: async () => {
         const { projects: profiles, broken } = await projects.list()
-        return { projects: projectStatuses(state, registry, profiles), broken }
+        return {
+          projects: projectStatuses(state, registry, profiles, await geometryKeys(models)),
+          broken,
+        }
       },
     },
 

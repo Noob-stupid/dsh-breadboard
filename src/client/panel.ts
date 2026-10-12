@@ -75,6 +75,15 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
    */
   const [scanReport, setScanReport] = useState<ProjectScanReport | undefined>(undefined)
   /**
+   * **导入建模组时"只补缺"**（用户批准的新选项，默认关）。
+   *
+   * ★ 默认关 = **换装（覆盖）**：那是用户明确要换掉某个型号时才会去点的动作。
+   * ★ 打开 = **只补缺**：台账里已有几何的型号跳过不动 ——
+   *   给 B 项目补缺口时**不误伤 A 已建好的同键模型**
+   *   （两个项目共用 `esp32-seat-sensor` 这种通用主控时很要命）。
+   */
+  const [onlyMissingImport, setOnlyMissingImport] = useState(false)
+  /**
    * 宿主是否具备聊天能力（`capabilities.chat`）。
    *
    * ★ 缺省时**隐藏输入框**，不显示一个发不出去的框 ——
@@ -395,6 +404,9 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           void channelRef.current?.dispatch({ kind: 'import_project', projectId }),
         disabled: !ready,
         revision: channelRef.current?.latest()?.revision ?? 0,
+        // ★ "只补缺"开关：默认关（换装/覆盖）；打开则不碰已有几何的型号
+        onlyMissingImport,
+        onToggleOnlyMissingImport: setOnlyMissingImport,
         // ★ **导入项目本体** —— 一个完整的前后端项目文件夹（如 D:\MAX_xiangmu）
         //   收整个文件夹的清单，交给宿主**扫描出它需要哪些硬件**。
         onImportProjectFolder: async (files) => {
@@ -465,10 +477,19 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           const picked = files.filter((file) => /\.(glb|gltf)$/i.test(file.name))
           if (picked.length === 0) return '这个文件夹里没有 .glb / .gltf'
           let done = 0
+          let skippedExisting = 0
           for (const file of picked) {
             const segments = (file.webkitRelativePath || file.name).split('/')
             const modelKey = segments.length >= 2 ? (segments[segments.length - 2] ?? '') : ''
             if (modelKey === '') continue
+            // ★★ **只补缺**（用户批准的新选项）：台账里已有几何的型号**跳过不动**。
+            //   ⇒ 给 B 项目补缺口时，**不会误伤 A 项目已建好的同键模型**
+            //     （两个项目共用 `esp32-seat-sensor` 这种通用主控时，这很要命）。
+            //   默认**不勾** = 换装（覆盖），那是用户明确要换掉时才会去点的动作。
+            if (onlyMissingImport && registry.has(modelKey)) {
+              skippedExisting += 1
+              continue
+            }
             const result = await registry.upload(modelKey, file)
             if (!result.ok) return `${modelKey}：${result.reason ?? '未知原因'}`
             providerRef.current?.invalidate(modelKey)
@@ -476,7 +497,12 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
             done += 1
           }
           setRecords([...registry.list()])
-          pushNotice({ text: `建模组已导入 ${String(done)} 个型号`, severity: 'info' })
+          pushNotice({
+            text:
+              `建模组已导入 ${String(done)} 个型号` +
+              (skippedExisting > 0 ? `，跳过 ${String(skippedExisting)} 个已有几何的（只补缺）` : ''),
+            severity: 'info',
+          })
           return undefined
         },
       }),

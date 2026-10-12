@@ -125,6 +125,9 @@ export interface ProjectPanelProps {
   readonly onImportModelSet: (files: readonly File[]) => Promise<string | undefined>
   /** 项目本体扫描报告（导入项目文件夹后才有）。 */
   readonly scanReport?: ProjectScanReport
+  /** **导入建模组时"只补缺"**（默认关 = 换装/覆盖）。 */
+  readonly onlyMissingImport: boolean
+  readonly onToggleOnlyMissingImport: (value: boolean) => void
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -246,6 +249,35 @@ export function ProjectPanel(props: ProjectPanelProps) {
         },
         h('div', { style: { fontSize: '12px', fontWeight: 600 } }, project.label),
         h('div', { style: { fontSize: '11px', color: status.color } }, status.text),
+        // ★★ **建模台账** —— 用户要的："切成 B 项目，如果还没建模，那就是 B 对空建模待建"
+        //
+        //   切换项目看的**不是**全局模型库，而是**这个项目**要哪些型号、现在有没有：
+        //   ✅ = 库里有几何；❌ = **待建**（场景里那个器件现在是占位盒）。
+        //   ⇒ 缺的必须**点名**，否则用户只知道"好像不对"，不知道怎么修。
+        project.modelNeeds.length > 0
+          ? h(
+              'div',
+              {
+                key: '__ledger',
+                style: { fontSize: '10px', lineHeight: 1.5, whiteSpace: 'pre-line' },
+                title:
+                  '这个项目的建模台账：✅ 已有几何 / ❌ 待建（场景里显示为占位盒）\n' +
+                  (project.missingModels.length > 0
+                    ? `缺：${project.missingModels.join('、')}`
+                    : '需要的型号都已有几何'),
+              },
+              project.modelNeeds
+                .map((need) => `${need.hasGeometry ? '✅' : '❌'} ${need.label}`)
+                .join('\n'),
+            )
+          : null,
+        project.missingModels.length > 0
+          ? h(
+              'div',
+              { style: { fontSize: '10px', color: '#ffc46b', lineHeight: 1.4 } },
+              `建模待建：${project.missingModels.join('、')} —— 先查网上有没有现成的，导不进来就列清单，没有就让 agent 建`,
+            )
+          : null,
         // ★ 差什么**列出来** —— "没通"必须可执行，否则用户只能猜
         project.missing.length > 0 && project.imported
           ? h(
@@ -626,6 +658,34 @@ export function ProjectPanel(props: ProjectPanelProps) {
       // ```
       //
       //   ⇒ "导出建模组"与"导入建模组"就是同一套布局的往返，**不需要另定格式**。
+      //
+      // ★★ **"只补缺"开关**（用户批准）：默认关 = 换装（覆盖同键）。
+      //   打开 = 库里有几何的型号**跳过不动** —— 给 B 项目补缺口时
+      //   **不误伤 A 已建好的同键模型**（两个项目共用通用主控时很要命）。
+      h(
+        'label',
+        {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontSize: '10px',
+            opacity: 0.85,
+            cursor: props.disabled ? 'not-allowed' : 'pointer',
+          },
+          title:
+            '勾上：**只补缺** —— 已有几何的型号跳过不动（给 B 补缺口不会误伤 A）。\n' +
+            '不勾（默认）：**换装** —— 同键已有几何会被替换（你明确要换掉某个型号时才用）。',
+        },
+        h('input', {
+          type: 'checkbox',
+          checked: props.onlyMissingImport,
+          disabled: props.disabled,
+          onChange: (event: { target?: { checked?: boolean } }) =>
+            props.onToggleOnlyMissingImport(event.target?.checked === true),
+        }),
+        '只补缺（不覆盖已有几何的型号）',
+      ),
       h(
         'label',
         {
