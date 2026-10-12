@@ -1,0 +1,105 @@
+# 把已发布的 Release 资产发到 npm —— owner: session-24ca6e69
+#
+# ══════════════════════════════════════════════════════════════════════════
+# ★★ 为什么这个工作流**不构建**，而是"取 Release 上的 tgz 再发"
+# ══════════════════════════════════════════════════════════════════════════
+#
+# 社区列表维护者报告的安装阻塞（entries 没有 npm 字段时会按仓库 URL 做 git 安装）：
+# 本仓 `lib/` 是**故意不入库**的，而 `scripts/prepare.mjs` 的构建依赖
+# `bash scripts/build.sh` ⇒ 后者要求机器上有 **DSH 源码检出**。
+# 在没有该检出的机器上，prepare 只打印告警就 exit 0 ⇒ lib/ 没生成
+# ⇒ `import lib/index.js` 报 ERR_MODULE_NOT_FOUND ⇒ **一键安装装上一个没有入口的插件**。
+#
+# 用户选了"发到 npm"这一条（而不是把构建产物入库）。而 **CI 里同样没有 DSH 检出**
+# —— 也就是说：**在 CI 里构建会遇到同一个坑**。
+#
+# ⇒ 所以这里**不构建**，只做**发布**：
+#     本地构建 → `npm pack` → `gh release create` 把 tgz 作为资产附上
+#     → **本工作流把那个资产取下来，`npm publish <tgz>`**
+#   · 构建只在**有 DSH 检出**的机器上发生一次（本地），CI 不重复这件事；
+#   · 发布的**就是用户能下载到的同一个字节流** —— 谁也不会拿到"CI 里另构建的一份"；
+#   · 与"`lib/` 不入库"的既有规矩不冲突。
+#
+# ══════════════════════════════════════════════════════════════════════════
+# ★ 触发方式：**published release**
+# ══════════════════════════════════════════════════════════════════════════
+#
+#   用 `release: published` 而不是 tag push，理由很具体：
+#     · 这个工作流的输入是**Release 资产**，资产在 Release 创建时才存在
+#       ⇒ 挂在 tag 上会撞上"资产还没上传完"的竞态（偶发失败，最难查）；
+#     · 语义也更准：**发了 Release 才发 npm**，而不是"打了 tag 就发 npm"。
+#   ⚠️ 若将来改成 tag 触发，必须改成"先等资产就绪"再发，别直接取。
+#
+# ══════════════════════════════════════════════════════════════════════════
+# ★ 前提：仓库需要 NPM_TOKEN secret（npm 的 **Automation** token）
+# ══════════════════════════════════════════════════════════════════════════
+#
+#   没有它，`npm publish` 会以 ENEEDAUTH 失败 —— 这个失败是**可见**的，
+#   不会静默跳过（见下面"读不到 secret 就直接失败"那一步）。
+#   ★ Automation token 而不是 Classic：Automation 可以绕过 2FA 提示，
+#     适合无人值守的 CI；用 Classic 会在有 2FA 的账号上卡住。
+
+name: publish-npm
+
+on:
+  release:
+    types: [published]
+
+# 最小权限：本工作流只需要读 Release 资产，不需要写仓库
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # ── 取 package.json（只为**发布后核对**版本号用；不构建、不读源码）──
+      - uses: actions/checkout@v4
+        with:
+          # 只取一层历史：本工作流不需要完整历史，省时间也省额度
+          fetch-depth: 1
+
+      # ── 取回 Release 上的 tgz（发布的对象**就是它**）──
+      - name: 下载 Release 资产里的 tgz
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern '*.tgz' \
+            --dir dist
+          ls -l dist
+
+      # ── 读 secret。缺失就**明确失败**，不静默继续 ──
+      - name: 检查 NPM_TOKEN 是否配置
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::error::仓库没有配置 NPM_TOKEN secret（需要一个 npm Automation token）。"
+            echo "::error::配置位置：Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # ── 发布。用 token 认证，不写进任何文件 ──
+      - name: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TGZ=$(ls dist/*.tgz | head -n1)
+          echo "发布：$TGZ"
+          npm publish "$TGZ" --access public
+          # 发布后核对：registry 上确实有这一版（否则"成功"只是本地打印）
+          NAME=$(node -e "console.log(require('./package.json').name)" 2>/dev/null || true)
+          VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || true)
+          echo "integrity:"
+          npm view "${NAME}@${VERSION}" dist.integrity || true
