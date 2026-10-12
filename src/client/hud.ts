@@ -358,7 +358,17 @@ export function ImportControls(props: ImportControlsProps) {
         event.target.value = ''
       },
     }),
-    ...Object.values(HARDWARE_MODELS).map((model) => {
+    // ★★ **型号行要能自己滚**（用户："下面那个换装模型那种应该有滚轮滑动，你看都超出边界了"）
+    //
+    //   ⚠️ 这些行原来**直接铺在 Panel 里**，型号一多（现在 7 个，还会长）
+    //     就**顶穿面板下边界**，下面的东西被挤出可视区。
+    //   ★ 与 ① 的器件列表同一个处理：滚动收在**这一块自己**身上，
+    //     并加 `overscrollBehavior: contain` —— 否则滚到尽头后滚轮会**漏给场景**
+    //     把 3D 视角一起缩放了（两件事同时发生，最难排查）。
+    createElement(
+      'div',
+      { style: RECORDS_LIST_STYLE },
+      ...Object.values(HARDWARE_MODELS).map((model) => {
       const imported = props.records.find((record) => record.modelKey === model.key)
       return createElement(
         'div',
@@ -420,10 +430,28 @@ export function ImportControls(props: ImportControlsProps) {
               '清除',
             )
           : null,
-      )
-    }),
+        )
+      }),
+    ),
   )
 }
+
+/**
+ * ② 「换装模型」里**型号行列表**的容器样式。
+ *
+ * ★ `overscrollBehavior: 'contain'` 不是装饰：没有它，滚到列表尽头时
+ *   **滚轮会漏给场景**，把 3D 视角一起缩放了 —— 用户以为滚的是列表，
+ *   实际动的是镜头，这种"两件事同时发生"最难排查。
+ */
+const RECORDS_LIST_STYLE = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '5px',
+  maxHeight: '260px',
+  overflowY: 'auto' as const,
+  overscrollBehavior: 'contain' as const,
+  paddingRight: '4px',
+} as const
 
 const PROVIDES_LABEL: Record<ModelSource['provides'], string> = {
   geometry: '几何',
