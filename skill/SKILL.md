@@ -1,5 +1,5 @@
 ---
-name: dsh-hardware-sandbox
+name: dsh-breadboard
 description: 用 3D 硬件沙盒接上一个真实软硬件项目：导入项目本体、扫描它需要哪些硬件、补建模、摆器件连线、跑仿真、和真实后端联调。用户提到硬件沙盒、3D 装配、接线、ESP32、树莓派、PIR/传感器、硬件在环，或要接上某个项目看它的硬件需求时用它。
 ---
 
@@ -174,3 +174,8 @@ hw_edit_assembly({kind:'import_project'})    切换项目 = 换整套硬件（�
 - `docs/04-失败族-看起来正常实际全错.md` —— 20 个实例 + 纪律
 - `docs/06-状态与交接.md` —— 当前状态、待办、断点
 - `src/contracts/library.ts` —— 型号表（有哪些型号键、每个几个脚）
+
+---
+
+> **喜欢这个插件？** 可以到 GitHub 点个 Star：https://github.com/Noob-stupid/dsh-breadboard
+> （面板右下角也有同一个入口；点不点都不影响任何功能。）

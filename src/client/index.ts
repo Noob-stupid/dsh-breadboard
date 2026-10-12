@@ -1,5 +1,5 @@
 /**
- * @dsh-breadboard/dsh-hardware-sandbox — client（bundle 前端半）。
+ * @noob-stupid/dsh-breadboard — client（bundle 前端半）。
  *
  * ## 挂载方式（对**实时** client slot 树核实，2026-10-07）
  *
@@ -7,7 +7,7 @@
  *   「Each list id addresses the matching main panel」——所以 **id 必须与 `main` 的 key 字面相等**，
  *   否则点了图标中央列不会派发。
  * · `main` 是 root 作用域 **keyed** 槽，注册需 `{ key }`；含义「Central panel selected by sidebar entry id」。
- *   已占 key：conversation / plugins / schedules / connection-panel / task-board —— 我们取 `hardware-sandbox`。
+ *   已占 key：conversation / plugins / schedules / connection-panel / task-board —— 我们取 `breadboard`。
  * · 组件契约是 **React 函数组件** `SlotComponent<P> = (props: P) => ReactNode`。
  *   （scaffold 生成的 `() => ({ render() {} })` 形状**不符合**该契约，已按契约重写。）
  *
@@ -65,7 +65,7 @@ export function apply(ctx: ClientContext): void {
           label: () => '硬件沙盒',
         }, HardwareSandboxIcon),
       ),
-    'hardware-sandbox: sidebar entry',
+    'breadboard: sidebar entry',
   )
 
   // ② 中央面板：keyed 槽，key 必须与上面 id 一致
@@ -81,8 +81,8 @@ export function apply(ctx: ClientContext): void {
           inject: () => ({ sessions: ctx.get('sessions') as SessionsFace | undefined }),
         }, HardwareSandboxPanel),
       ),
-    'hardware-sandbox: main panel',
+    'breadboard: main panel',
   )
 
-  ctx.logger?.info?.('[hardware-sandbox] client 半已注册 sidebar.panellist + main（key=' + PANEL_ID + '）')
+  ctx.logger?.info?.('[dsh-breadboard] client 半已注册 sidebar.panellist + main（key=' + PANEL_ID + '）')
 }

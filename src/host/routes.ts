@@ -1,6 +1,6 @@
 /**
  * 宿主半路由 —— 前端 ↔ 宿主 的桥（设计文档 §10 的「薄适配层」）
- * @module dsh-hardware-sandbox/host/routes
+ * @module dsh-breadboard/host/routes
  *
  * ★ 为什么是 HTTP/WS 而不是 `host.call`：
  *   `host.call` 只存在于「动态 Cordis 插件」的 runner 路径（cordis-client-runner），

@@ -1,6 +1,6 @@
 /**
  * 联网设备工具 —— 把第二类虚拟硬件暴露给 DS（设计文档 §5.4 / §10 薄适配层）
- * @module dsh-hardware-sandbox/host/network-tools
+ * @module dsh-breadboard/host/network-tools
  *
  * ★ 与 `tools.ts` 同属适配层，**同样的 schema 纪律**（详见 `tools.ts` 文件头）：
  *   · `parameters` 与 `output.schema` **都要写成已编译的标准 JSON Schema**

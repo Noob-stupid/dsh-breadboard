@@ -1,6 +1,6 @@
 /**
  * step.parts 客户端 —— 唯一一个「公共 API + 免鉴权 + 直接给 GLB」的模型来源
- * @module dsh-hardware-sandbox/core/models/step-parts
+ * @module dsh-breadboard/core/models/step-parts
  *
  * ★★ 为什么是它（2026-10-07 核实，详见 `docs/05-模型来源与导入方案.md`）：
  *

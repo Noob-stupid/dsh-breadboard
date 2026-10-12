@@ -1,5 +1,5 @@
 // 上线验证：step.parts 搜索 + 一键导入（真下载真入库）。跑完即删。
-const b = 'http://127.0.0.1:19387/@dsh-breadboard/dsh-hardware-sandbox'
+const b = 'http://127.0.0.1:19387/@noob-stupid/dsh-breadboard'
 const j = async (r) => {
   const t = await r.text()
   try { return JSON.parse(t) } catch { return t.slice(0, 120) }

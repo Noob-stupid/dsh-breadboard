@@ -1,6 +1,6 @@
 /**
  * ModelStore —— 用户导入的模型（几何）持久化
- * @module dsh-hardware-sandbox/core/models/store
+ * @module dsh-breadboard/core/models/store
  *
  * ★ **只存用户导入的东西，插件不分发任何第三方模型。**
  *   存储落在宿主侧的**用户数据目录**（不是插件包内），因此刷新、换机器、重装插件都不会丢。

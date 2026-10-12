@@ -27,7 +27,7 @@ import urllib.request
 import numpy as np
 
 GLB = sys.argv[1] if len(sys.argv) > 1 else r"C:\Users\花火\.dsh\dsh-hardware-sandbox\models\rpi-4b\model.bin"
-SNAPSHOT = "http://127.0.0.1:19387/@dsh-breadboard/dsh-hardware-sandbox/api/assembly"
+SNAPSHOT = "http://127.0.0.1:19387/@noob-stupid/dsh-breadboard/api/assembly"
 COMPONENT_ID = sys.argv[2] if len(sys.argv) > 2 else "c1"
 
 

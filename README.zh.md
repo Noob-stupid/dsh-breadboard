@@ -19,6 +19,8 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 装完刷新页面即可。沙盒注册进 **`main`** 槽（3D 视图）与 **`sidebar.panellist`** 槽（各面板）；
 `skill/SKILL.md` 随插件一起注册，装了这个插件的 agent 已经知道该怎么用它。
 
+**喜欢的话**：到 [GitHub 点个 Star](https://github.com/Noob-stupid/dsh-breadboard) —— 面板右下角也有同一个入口。
+
 这一行能生效靠三件事，三件都在本仓库里：
 
 | 要求 | 位置 | 说明 |
@@ -226,10 +228,10 @@ npm run typecheck:client  # tsc -p tsconfig.client.json --noEmit   -> exit 0
 ### 活体自检：线上跑的是你以为的那次构建吗？
 
 ```sh
-curl http://127.0.0.1:<端口>/@dsh-breadboard/dsh-hardware-sandbox/api/capabilities
+curl http://127.0.0.1:<端口>/@noob-stupid/dsh-breadboard/api/capabilities
 ```
 
-所有界面与 API 都挂在路由前缀 `/@dsh-breadboard/dsh-hardware-sandbox/` 下。`GET …/api/capabilities`
+所有界面与 API 都挂在路由前缀 `/@noob-stupid/dsh-breadboard/` 下。`GET …/api/capabilities`
 返回 `build`（**当前活着**的那份代码的构建时间戳）与 `simTools`（**实际注册成功**的工具名）。
 觉得哪里不对就先看它：工具注册失败是**完全静默**的 —— 模型只会说"我没这个能力"，界面上看不出任何异常；
 而热重载可能报成功、实际还是旧模块在服务。

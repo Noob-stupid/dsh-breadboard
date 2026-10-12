@@ -1,6 +1,6 @@
 /**
  * 智座座位传感器协议适配器
- * @module dsh-hardware-sandbox/core/devices/protocols/zhizuo
+ * @module dsh-breadboard/core/devices/protocols/zhizuo
  *
  * 对应项目：`D:\MAX_xiangmu`（Flask + SocketIO 的「智能选座与导航一体化系统」）。
  * 真机是「每个座位一个 ESP32 + 双红外」，按周期把读数 HTTP 上报。

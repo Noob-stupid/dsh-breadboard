@@ -20,6 +20,9 @@ Then reload the page. The sandbox registers into the **`main`** slot (the 3D vie
 **`sidebar.panellist`** slot (the panels); `skill/SKILL.md` ships with the plugin, so an agent
 that has it installed already knows how to drive it.
 
+**Like it?** [Give it a star on GitHub](https://github.com/Noob-stupid/dsh-breadboard) — the
+panel has the same hook in its bottom-right corner.
+
 Three things make that one line work — all three are in this repository:
 
 | Requirement | Where | Note |
@@ -256,10 +259,10 @@ Release artifact: `npm pack` → a `.tgz` containing `lib`, `cordis.patch.yml`, 
 ### Self-check: is the live build the build you think it is?
 
 ```sh
-curl http://127.0.0.1:<port>/@dsh-breadboard/dsh-hardware-sandbox/api/capabilities
+curl http://127.0.0.1:<port>/@noob-stupid/dsh-breadboard/api/capabilities
 ```
 
-All UI and API live under the route prefix `/@dsh-breadboard/dsh-hardware-sandbox/`. `GET …/api/capabilities`
+All UI and API live under the route prefix `/@noob-stupid/dsh-breadboard/`. `GET …/api/capabilities`
 returns `build` (the build timestamp of the **currently live** code) and `simTools` (the tools that
 **actually registered**). Reach for it first when something looks wrong: tool registration failure is
 **completely silent** — the model just says it does not have that capability and the UI shows nothing

@@ -1,6 +1,6 @@
 /**
  * **项目切换面板** —— owner: session-24ca6e69
- * @module dsh-hardware-sandbox/client/project-panel
+ * @module dsh-breadboard/client/project-panel
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 为什么它是这个插件界面上最重要的一块

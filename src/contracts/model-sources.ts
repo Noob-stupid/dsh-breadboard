@@ -1,6 +1,6 @@
 /**
  * 模型来源清单 —— 共享契约
- * @module dsh-hardware-sandbox/contracts/model-sources
+ * @module dsh-breadboard/contracts/model-sources
  *
  * ★ **这不是爬虫配置，是"帮你打开一个网页"的链接表。**
  *

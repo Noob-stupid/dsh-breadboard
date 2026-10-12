@@ -33,7 +33,7 @@
 ### 2.1 宿主半（Node）——Cordis bundle 插件
 
 ```ts
-export const name = "@dsh-breadboard/dsh-hardware-sandbox"
+export const name = "@noob-stupid/dsh-breadboard"
 export const inject = ['tools', 'subprocess', 'webServer', 'timer', 'fs']
 export const Config = z.object({ /* schemastery */ })
 export function apply(ctx: AppContext, config: Config): void { /* ... */ }
@@ -64,7 +64,7 @@ subprocess.spawn({
 export const inject = ['slots']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
-    name: 'main', key: 'hardware-sandbox', label: () => '硬件沙盒', component: () => (...)
+    name: 'main', key: 'breadboard', label: () => '硬件沙盒', component: () => (...)
   })), 'label')
 }
 ```

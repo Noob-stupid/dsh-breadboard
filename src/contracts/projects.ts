@@ -1,6 +1,6 @@
 /**
  * **软硬件项目**契约 —— owner: session-24ca6e69
- * @module dsh-hardware-sandbox/contracts/projects
+ * @module dsh-breadboard/contracts/projects
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 为什么要有"项目"这一层，而不是让用户一个个摆器件

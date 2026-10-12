@@ -1,6 +1,6 @@
 /**
  * 装配状态（SSOT）契约 —— 冻结契约（owner: session-24ca6e69）
- * @module dsh-hardware-sandbox/contracts/assembly
+ * @module dsh-breadboard/contracts/assembly
  *
  * ★ 单一 SSOT 的意义（§6.1）：装配状态与虚拟设备状态**共用一份真相**，
  *   3D 场景是它的**投影**，不是副本（§4.2.4）。

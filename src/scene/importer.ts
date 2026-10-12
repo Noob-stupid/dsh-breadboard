@@ -473,7 +473,7 @@ export class ImportedModelProvider implements ModelProvider {
       //   实测代价：用户看到"怎么变成占位盒了"，而**没有任何一处能指出为什么**。
       //   ⇒ 静默兜底 = 把「没验」伪装成「验过了」，正是本项目失败族的第 1 形态。
       console.warn(
-        `[hardware-sandbox] ${modelKey}：清单里没有它 ⇒ 保留占位盒。` +
+        `[dsh-breadboard] ${modelKey}：清单里没有它 ⇒ 保留占位盒。` +
           `（registry.isLoaded()=${String(this.registry.isLoaded())}，` +
           `清单条数=${String(this.registry.list().length)}）`,
       )
@@ -490,7 +490,7 @@ export class ImportedModelProvider implements ModelProvider {
       // 拿不到就保留占位 —— 不重试风暴，不白屏。
       // ★ 但**必须把原因打出来**：否则"加载失败"与"根本没导入"在界面上无法区分。
       console.warn(
-        `[hardware-sandbox] ${modelKey}：真模型加载失败 ⇒ 保留占位盒。url=${url}`,
+        `[dsh-breadboard] ${modelKey}：真模型加载失败 ⇒ 保留占位盒。url=${url}`,
         error,
       )
       return null

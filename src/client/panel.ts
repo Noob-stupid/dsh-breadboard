@@ -36,6 +36,15 @@ import {
 } from './hud.ts'
 import { ProjectPanel, type ProjectScanReport } from './project-panel.ts'
 import { sendToCurrentSession } from './session-chat.ts'
+import {
+  GITHUB_MARK_ATTRS,
+  GITHUB_MARK_PATH,
+  STAR_FOOT_STYLE,
+  STAR_HINT_STYLE,
+  STAR_HINT_TEXT,
+  STAR_LINK_ATTRS,
+  STAR_LINK_STYLE,
+} from './star-hook.ts'
 import type { SessionsFace } from './slots.ts'
 
 /** 逐轴缩放比超过该倍数 ⇒ 长宽比不符，必须让用户看见。 */
@@ -541,5 +550,36 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           onDismiss: () => setMenu(null),
         })
       : null,
+    // ★ 右下角的 Star 钩子（2026-10-12 加）—— **面板既有子项一个不动**，只在最后追加一项。
+    //   它是纯展示：不读快照、不发 action、不参与装配与仿真（铁律①）。
+    createElement(StarFoot),
+  )
+}
+
+/**
+ * 右下角的 Star 钩子。
+ *
+ * ★ 为什么值得有：这个面板是"别人装上插件后**唯一**会看到的东西"，
+ *   而 GitHub 上的 Star 数是它被更多人看到的唯一途径。放一个**不挡事**的入口，
+ *   比在任何文档里写"欢迎 Star"都有用。
+ *
+ * ★ 为什么放右下角上方（`bottom: 52px`）：右下角已经站着 `ControlHint`，
+ *   贴同一个坐标就会叠字 —— 见 `star-hook.ts` 里 `STAR_FOOT_STYLE` 的注释。
+ *
+ * ★ 内容是**内联 SVG + 一个 `<a>`**（不引外链图片、不引第三方脚本/字体），
+ *   常量全部来自 `star-hook.ts`，那边有断言覆盖（`tests/star-hook.test.ts`）。
+ *
+ * ★ 为什么 `export`：测试要能断言"面板最后一个子项**就是**它"（而不是碰巧有个链接）。
+ */
+export function StarFoot() {
+  return createElement(
+    'div',
+    { style: STAR_FOOT_STYLE },
+    createElement(
+      'a',
+      { ...STAR_LINK_ATTRS, style: STAR_LINK_STYLE },
+      createElement('svg', GITHUB_MARK_ATTRS, createElement('path', { d: GITHUB_MARK_PATH })),
+      createElement('span', { style: STAR_HINT_STYLE }, STAR_HINT_TEXT),
+    ),
   )
 }

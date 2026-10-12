@@ -1,6 +1,6 @@
 /**
  * 联网设备契约 —— 冻结契约（owner: session-24ca6e69）
- * @module dsh-hardware-sandbox/contracts/network
+ * @module dsh-breadboard/contracts/network
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 为什么这是**第二类**虚拟硬件，而不是"又一种设备"

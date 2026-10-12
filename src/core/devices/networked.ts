@@ -1,6 +1,6 @@
 /**
  * NetworkedDevice —— 联网设备运行时（第二类虚拟硬件）
- * @module dsh-hardware-sandbox/core/devices/networked
+ * @module dsh-breadboard/core/devices/networked
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★ 为什么它**不是** `VirtualDevice`

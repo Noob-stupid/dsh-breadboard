@@ -1,6 +1,6 @@
 /**
  * 真实 `fetch` 实现的出网能力（设计文档 §10 薄适配层）
- * @module dsh-hardware-sandbox/host/fetch-transport
+ * @module dsh-breadboard/host/fetch-transport
  *
  * ★ 与 `subprocess-spawner.ts` 同属适配层：把宿主能力包成内核要的**注入点**。
  *   内核（`core/**`）因此零依赖宿主 API，测试可以塞假传输、不联网跑完整条逻辑。

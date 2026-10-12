@@ -1,6 +1,6 @@
 /**
  * BridgeServer —— IPC 服务端（设计文档 §1.0 / §1.1 / §7.2）
- * @module dsh-hardware-sandbox/core/bridge/server
+ * @module dsh-breadboard/core/bridge/server
  *
  * ★ 架构位置：虚拟硬件权威侧在宿主，本类是**唯一**把外部项目进程的硬件访问接进权威状态的入口。
  *   Python 侧 shim 只做序列化转发，不含任何硬件语义。

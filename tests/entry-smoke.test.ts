@@ -48,7 +48,7 @@ async function waitForLog(logs: string[], needle: string, timeoutMs = 2000): Pro
 }
 
 test('插件导出形状正确', () => {
-  assert.equal(name, '@dsh-breadboard/dsh-hardware-sandbox')
+  assert.equal(name, '@noob-stupid/dsh-breadboard')
   assert.ok(Array.isArray(inject), 'inject 必须是数组（Cordis 服务注入声明）')
   assert.equal(typeof apply, 'function')
   assert.ok(Config, 'Config schema 必须导出，否则宿主无法投影配置')

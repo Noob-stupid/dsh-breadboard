@@ -1,6 +1,6 @@
 /**
  * 工具注册 —— 把内核能力暴露给 DS（设计文档 §5.4 / §10 薄适配层）
- * @module dsh-hardware-sandbox/host/tools
+ * @module dsh-breadboard/host/tools
  *
  * ★ 与 `routes.ts` 同属适配层：**结构等价**宿主类型，不 import 宿主包。
  *   §10.3 要求内核零依赖宿主 API；宿主接口若改名，改动收敛在本文件。

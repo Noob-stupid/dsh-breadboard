@@ -27,7 +27,7 @@ export { HTTP_ROUTES, ROUTE_PREFIX, WS_ROUTE } from '../contracts/protocol.ts'
  * the sidebar owns the button and resolves its label from list metadata.」
  * 二者不一致 = 点了图标但中央面板不派发。
  */
-export const PANEL_ID = 'hardware-sandbox'
+export const PANEL_ID = 'breadboard'
 
 /**
  * 由 `WS_ROUTE` 构造绝对 `ws://` / `wss://` 地址。

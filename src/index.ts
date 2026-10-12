@@ -1,5 +1,5 @@
 /**
- * @dsh-breadboard/dsh-hardware-sandbox —— 插件宿主半入口
+ * @noob-stupid/dsh-breadboard —— 插件宿主半入口
  *
  * 本文件是**宿主半（Node）**的组装点。它刻意保持单薄：
  * 内核逻辑全部在 src/core/**，且**零依赖 DSH 宿主 API**（§10.3 硬要求），
@@ -80,7 +80,7 @@ interface WebSearchLike {
   }>
 }
 
-export const name = '@dsh-breadboard/dsh-hardware-sandbox'
+export const name = '@noob-stupid/dsh-breadboard'
 
 /**
  * 需要宿主提供的服务。
@@ -261,10 +261,10 @@ function seedDemoAssembly(state: AssemblyState, log: (message: string) => void):
 
 export function apply(ctx: AppContext, config: Config): void {
   const log = (message: string): void => {
-    ctx.logger?.info?.(`[dsh-hardware-sandbox] ${message}`)
+    ctx.logger?.info?.(`[dsh-breadboard] ${message}`)
   }
   const warn = (message: string): void => {
-    ctx.logger?.warn?.(`[dsh-hardware-sandbox] ${message}`)
+    ctx.logger?.warn?.(`[dsh-breadboard] ${message}`)
   }
 
   /**
@@ -283,7 +283,7 @@ export function apply(ctx: AppContext, config: Config): void {
    *
    * ⚠️⚠️ 走过的弯路，记下来免得重犯：
    *   我一开始把 `SKILL.md` 放进 `~/.dsh/skills/`，**界面上看得到**（设置页照列那个目录），
-   *   但 `skill dsh-hardware-sandbox` 一直报 **`unknown or no longer available`**。
+   *   但 `skill dsh-breadboard` 一直报 **`unknown or no longer available`**。
    *
    *   原因：读用户目录的那个 provider 是 **`dsh-skill-filesystem`，而它在 profile 里是
    *   `[disabled]`** ⇒ **界面显示 ≠ agent 能加载**。
@@ -319,7 +319,7 @@ export function apply(ctx: AppContext, config: Config): void {
       const matched = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw)
       const front = matched?.[1] ?? ''
       const content = (matched === null ? raw : raw.slice(matched[0].length)).trim()
-      const name = /^name:\s*(.+)$/m.exec(front)?.[1]?.trim() ?? 'dsh-hardware-sandbox'
+      const name = /^name:\s*(.+)$/m.exec(front)?.[1]?.trim() ?? 'dsh-breadboard'
       const description = /^description:\s*(.+)$/m.exec(front)?.[1]?.trim() ?? ''
       if (description === '' || content === '') {
         warn(`Skill 注册跳过：${skillFile} 缺 description 或正文`)
@@ -413,7 +413,7 @@ export function apply(ctx: AppContext, config: Config): void {
     () => () => {
       registry.dispose()
     },
-    'dsh-hardware-sandbox: device-registry',
+    'dsh-breadboard: device-registry',
   )
 
   if (config.seedDemo) seedDemoAssembly(state, log)
@@ -610,7 +610,7 @@ export function apply(ctx: AppContext, config: Config): void {
         }
         bundle.dispose()
       },
-      'dsh-hardware-sandbox: routes',
+      'dsh-breadboard: routes',
     )
   }
 
@@ -673,7 +673,7 @@ export function apply(ctx: AppContext, config: Config): void {
             }
           }
         },
-        'dsh-hardware-sandbox: tools',
+        'dsh-breadboard: tools',
       )
     }
 
@@ -683,7 +683,7 @@ export function apply(ctx: AppContext, config: Config): void {
       () => () => {
         void engine.dispose()
       },
-      'dsh-hardware-sandbox: sim-engine',
+      'dsh-breadboard: sim-engine',
     )
   }
 
@@ -752,7 +752,7 @@ export function apply(ctx: AppContext, config: Config): void {
             }
           }
         },
-        'dsh-hardware-sandbox: network-tools',
+        'dsh-breadboard: network-tools',
       )
     }
 
@@ -762,7 +762,7 @@ export function apply(ctx: AppContext, config: Config): void {
       () => () => {
         networkRegistry.dispose()
       },
-      'dsh-hardware-sandbox: network-registry',
+      'dsh-breadboard: network-registry',
     )
   }
 

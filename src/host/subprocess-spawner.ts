@@ -1,6 +1,6 @@
 /**
  * 宿主 `subprocess` → {@link SimSpawner} 适配器（设计文档 §10 薄适配层）
- * @module dsh-hardware-sandbox/host/subprocess-spawner
+ * @module dsh-breadboard/host/subprocess-spawner
  *
  * ★ 与 `routes.ts` / `tools.ts` 同属适配层：**结构等价**宿主类型，不 import 宿主包。
  *   §10.3 要求内核零依赖宿主 API；宿主接口若改名，改动收敛在本文件。

@@ -1,6 +1,6 @@
 /**
  * **项目存储** —— 用户自己的软硬件项目（默认**空**）。
- * @module dsh-hardware-sandbox/core/projects/store
+ * @module dsh-breadboard/core/projects/store
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 为什么从"硬编码常量"改成"用户文件"

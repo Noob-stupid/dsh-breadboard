@@ -1,6 +1,6 @@
 /**
  * DeterministicTestDevice —— 验收专用确定性设备（设计文档 §0.4 P3）
- * @module dsh-hardware-sandbox/core/devices/deterministic
+ * @module dsh-breadboard/core/devices/deterministic
  *
  * 设计文档给的原型是「每次 tick 就 +1」。**那个原型与 §7.3 的时钟设计自相矛盾**，
  * 必须修正，否则 P3 的断言 `readings == [1,2,3,4,5]` 永远不可能成立：

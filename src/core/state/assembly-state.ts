@@ -1,6 +1,6 @@
 /**
  * AssemblyState —— 装配状态（SSOT）· 设计文档 §6.1
- * @module dsh-hardware-sandbox/core/state/assembly-state
+ * @module dsh-breadboard/core/state/assembly-state
  *
  * ★ 单一真相源。三 realm 里**只有宿主持有它**：
  *   浏览器是它的投影（§4.2.4「场景是状态的投影，不是副本」），

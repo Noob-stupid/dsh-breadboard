@@ -1,6 +1,6 @@
 /**
  * SimEngine —— 仿真生命周期（设计文档 §5.1 闭环 / §8 流程 B、C）
- * @module dsh-hardware-sandbox/core/sim/engine
+ * @module dsh-breadboard/core/sim/engine
  *
  * 把已经就位的四块接成一条闭环：
  *   `AssemblyState`（SSOT）+ `VirtualClock` + `DeviceRegistry` + `BridgeServer` + **项目进程**

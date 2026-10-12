@@ -1,6 +1,6 @@
 /**
  * VirtualClock —— 虚拟时钟调度器（设计文档 §7.3）
- * @module dsh-hardware-sandbox/core/vclock
+ * @module dsh-breadboard/core/vclock
  *
  * ★ 权威侧在宿主（JS/Node 内核）。Python 侧 `time.sleep` 经 shim 转发到本类的 `advance()`。
  *

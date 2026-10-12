@@ -1,6 +1,6 @@
 /**
  * NetworkRegistry —— 把**装配状态**与**联网设备**接起来
- * @module dsh-hardware-sandbox/core/sim/network-registry
+ * @module dsh-breadboard/core/sim/network-registry
  *
  * 与 `DeviceRegistry` 是**并列**的两件事，不是它的扩展：
  * 那个管"等被读"的总线设备（虚拟时钟驱动），这个管"主动出网"的联网设备（墙钟驱动）。

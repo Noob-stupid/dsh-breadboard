@@ -1,6 +1,6 @@
 /**
  * 硬件模型库 `schema/` —— 接口语义 + **几何尺寸**（共享契约）
- * @module dsh-hardware-sandbox/contracts/library
+ * @module dsh-breadboard/contracts/library
  *
  * ★ 设计文档 §6.6：`ModelLib` 分 `geometry/`（几何模型）与 `schema/`（接口语义，核心壁垒）。
  *   本文件是 `schema/` 的**唯一真相**，且刻意放在 `contracts/` 而非 `core/`：

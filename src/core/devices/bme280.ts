@@ -1,6 +1,6 @@
 /**
  * BME280 寄存器级行为模型（设计文档 §5.2）
- * @module dsh-hardware-sandbox/core/devices/bme280
+ * @module dsh-breadboard/core/devices/bme280
  *
  * ★ 这是 §3.2「语义等价」真正被考验的地方。判据是三条：**结果一致 / 路径覆盖 / 异常一致**。
  *

@@ -209,7 +209,7 @@ export class SceneHost {
       try {
         layer.dispose()
       } catch (err) {
-        console.error('[hardware-sandbox] layer dispose failed', err)
+        console.error('[dsh-breadboard] layer dispose failed', err)
       }
     }
     this.layers.length = 0
@@ -229,7 +229,7 @@ export class SceneHost {
       try {
         cb(this)
       } catch (err) {
-        console.error('[hardware-sandbox] frame callback failed', err)
+        console.error('[dsh-breadboard] frame callback failed', err)
       }
     }
 
@@ -243,7 +243,7 @@ export class SceneHost {
       try {
         layer.apply?.()
       } catch (err) {
-        console.error('[hardware-sandbox] layer apply failed', err)
+        console.error('[dsh-breadboard] layer apply failed', err)
       }
     }
     this.renderer.render(this.scene, this.camera)

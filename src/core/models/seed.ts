@@ -1,6 +1,6 @@
 /**
  * **随包预置模型的补齐**（seed）—— owner: session-24ca6e69
- * @module dsh-hardware-sandbox/core/models/seed
+ * @module dsh-breadboard/core/models/seed
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 为什么需要它：一个"别人装上也一样"的问题

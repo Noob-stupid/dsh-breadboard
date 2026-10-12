@@ -1,6 +1,6 @@
 /**
  * 虚拟时间原语 —— 冻结契约（owner: session-24ca6e69）
- * @module dsh-hardware-sandbox/contracts/time
+ * @module dsh-breadboard/contracts/time
  *
  * ★ 设计要点：虚拟时间的**权威表示是整数微秒**（{@link Micros}），浮点秒只是便利视图。
  *

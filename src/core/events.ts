@@ -1,6 +1,6 @@
 /**
  * 事件桥 —— 设计文档 §6.2
- * @module dsh-hardware-sandbox/core/events
+ * @module dsh-breadboard/core/events
  *
  * ★ 承载**铁律②**：虚拟时钟 tick 绝不逐 tick 推前端。
  *   `advance(1.0)` 在 step=1ms 下产生 1000 次 tick；若每次 tick 都推一条消息过浏览器 RPC，

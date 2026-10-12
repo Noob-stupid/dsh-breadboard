@@ -1,6 +1,6 @@
 /**
  * IPC 线上协议 —— 冻结契约（设计文档 §1.0 / §1.1 / §7.2）
- * @module dsh-hardware-sandbox/contracts/ipc
+ * @module dsh-breadboard/contracts/ipc
  *
  * ★ 架构前提（§1.0 决策 B）：**虚拟硬件权威侧在宿主 JS**。
  *   Python 侧 shim **只做序列化转发，不含任何硬件语义** —— 行为模型、虚拟时钟、状态

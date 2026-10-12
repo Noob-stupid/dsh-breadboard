@@ -1,6 +1,6 @@
 /**
  * **项目导入工具** —— owner: session-24ca6e69
- * @module dsh-hardware-sandbox/host/project-tools
+ * @module dsh-breadboard/host/project-tools
  *
  * ══════════════════════════════════════════════════════════════════════════
  * ★★ 它把"手工摆四步"压成一次调用，而且**顺带回答了"通了没有"**

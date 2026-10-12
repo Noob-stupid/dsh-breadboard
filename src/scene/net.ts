@@ -148,7 +148,7 @@ export class SnapshotChannel implements SnapshotSource {
       try {
         listener(snapshot)
       } catch (err) {
-        console.error('[hardware-sandbox] snapshot listener failed', err)
+        console.error('[dsh-breadboard] snapshot listener failed', err)
       }
     }
   }

@@ -1,6 +1,6 @@
 /**
  * DeviceRegistry —— 把**装配状态**与**虚拟设备**接起来
- * @module dsh-hardware-sandbox/core/sim/device-registry
+ * @module dsh-breadboard/core/sim/device-registry
  *
  * ★ 设计文档 §6.1 的关键一句：「虚拟设备状态挂在 `AssemblyState` 上，而非独立维护。
  *   这样 3D 场景、事件桥、仿真环境**共用一份真相**。」

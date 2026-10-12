@@ -1,5 +1,5 @@
 # ============================================================================
-# dsh-hardware-sandbox —— DSH bundle patch
+# @noob-stupid/dsh-breadboard —— DSH bundle patch
 # ============================================================================
 # 这是插件的**挂载声明**。DSH 启动时按 bundle 层栈叠加各插件 patch，
 # 本文件把硬件沙盒插入 profile 的配置树。
@@ -17,5 +17,5 @@
 
 - insert:
     - id: dsh-hardware-sandbox
-      name: '@dsh-breadboard/dsh-hardware-sandbox'
+      name: '@noob-stupid/dsh-breadboard'
       config: {}

@@ -40,22 +40,22 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const entry = path.join(root, 'lib', 'index.js')
 
 if (existsSync(entry)) {
-  console.log('[dsh-hardware-sandbox] lib/ 已存在，跳过构建。')
+  console.log('[dsh-breadboard] lib/ 已存在，跳过构建。')
   process.exit(0)
 }
 
-console.log('[dsh-hardware-sandbox] 没有 lib/，尝试构建…')
+console.log('[dsh-breadboard] 没有 lib/，尝试构建…')
 const script = path.join(root, 'scripts', 'build.sh')
 const result = spawnSync('bash', [script], { cwd: root, stdio: 'inherit', shell: false })
 
 if (result.status === 0 && existsSync(entry)) {
-  console.log('[dsh-hardware-sandbox] 构建完成。')
+  console.log('[dsh-breadboard] 构建完成。')
   process.exit(0)
 }
 
 // ★ ② 只警告，不失败 —— 详见文件头
 console.warn(
-  '\n[dsh-hardware-sandbox] ⚠️ 没能构建出 lib/，插件**不会有入口**。\n' +
+  '\n[dsh-breadboard] ⚠️ 没能构建出 lib/，插件**不会有入口**。\n' +
     '  装法一（推荐）：用我们发布的 tgz —— 包里**已经带着** lib/。\n' +
     '  装法二：在本目录手动跑 `bash scripts/build.sh`（需要 bash + 已装 devDependencies）。\n' +
     `  诊断：exit=${String(result.status ?? 'null')} error=${String(result.error ?? '无')}\n`,

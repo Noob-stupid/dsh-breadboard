@@ -1,6 +1,6 @@
 /**
  * 前端 ↔ 宿主 协议契约 —— 冻结契约（owner: session-24ca6e69）
- * @module dsh-hardware-sandbox/contracts/protocol
+ * @module dsh-breadboard/contracts/protocol
  *
  * ★ 为什么是 HTTP/WS 而不是 `host.call`：
  *   `host.call` 只存在于「动态 Cordis 插件」的 runner 路径（cordis-client-runner），
@@ -10,7 +10,7 @@
 import type { AssemblySnapshot, HardwareEvent, Vec3 } from './assembly.ts'
 
 /** 本插件的全部路由前缀。 */
-export const ROUTE_PREFIX = '/@dsh-breadboard/dsh-hardware-sandbox' as const
+export const ROUTE_PREFIX = '/@noob-stupid/dsh-breadboard' as const
 
 /**
  * HTTP 路由（`ctx.webServer.register`）。

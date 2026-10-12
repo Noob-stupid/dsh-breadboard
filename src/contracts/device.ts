@@ -1,6 +1,6 @@
 /**
  * 虚拟设备契约 —— 冻结契约（owner: session-24ca6e69）
- * @module dsh-hardware-sandbox/contracts/device
+ * @module dsh-breadboard/contracts/device
  *
  * ★ 权威侧在宿主（JS/Node）。Python 侧 shim 只做序列化代理，不含任何硬件语义（设计文档 §1.0）。
  *   因此本文件定义的是**唯一一份**行为模型接口，不存在第二实现。
