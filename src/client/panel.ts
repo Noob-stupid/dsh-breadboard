@@ -16,7 +16,7 @@
  * ★ 铁律②：面板被切走 → rAF 停、场景不再重建，但**宿主侧仿真照跑**（SSOT 在宿主）。
  */
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
-import { HTTP_ROUTES, MODEL_ROUTES } from '../contracts/protocol.ts'
+import { HTTP_ROUTES, MODEL_ROUTES, modelItemUrl } from '../contracts/protocol.ts'
 import type { ImportModelResult, ImportedModelRecord } from '../contracts/protocol.ts'
 import { SceneHost } from '../scene/host.ts'
 import { PortTooltip } from './port-tooltip.ts'
@@ -468,12 +468,59 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
           if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
           return undefined
         },
-        // ★ **导入建模组** —— 一个文件夹，里面按型号分（`<型号键>/model.glb`）
+        // ★ **导入建模组** —— 两种形态都收：
+        //   ① 一个文件夹（`<型号键>/model.glb`）
+        //   ② **一个 .json 打包文件**（导出建模组产出的那个，装着一整套）
         onImportModelSet: async (files) => {
           const registry = registryRef.current
           if (!registry) return '模型库还没就绪'
-          // 从相对路径里取**第一段**作为型号键：
-          //   建模组/hc-sr501/model.glb → 键 = hc-sr501
+          // ── ② JSON 打包（"把整套建模存成一个文件"）──
+          const bundleFile = files.find((file) => /\.json$/i.test(file.name))
+          if (bundleFile !== undefined) {
+            let parsed: unknown
+            try {
+              parsed = JSON.parse(await bundleFile.text())
+            } catch {
+              return `${bundleFile.name} 不是合法 JSON`
+            }
+            const bundle = parsed as {
+              kind?: string
+              models?: { modelKey?: unknown; glbBase64?: unknown }[]
+            }
+            if (bundle.kind !== 'model-set' || !Array.isArray(bundle.models)) {
+              return '这个 JSON 不是建模组文件（缺 kind:"model-set"）'
+            }
+            let done = 0
+            let skippedExisting = 0
+            for (const entry of bundle.models) {
+              const modelKey = typeof entry.modelKey === 'string' ? entry.modelKey : ''
+              const base64 = typeof entry.glbBase64 === 'string' ? entry.glbBase64 : ''
+              if (modelKey === '' || base64 === '') continue
+              if (onlyMissingImport && registry.has(modelKey)) {
+                skippedExisting += 1
+                continue
+              }
+              // base64 → 字节 → File（upload 收 File）
+              const binary = atob(base64)
+              const bytes = new Uint8Array(binary.length)
+              for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+              const file = new File([bytes], 'model.glb', { type: 'model/gltf-binary' })
+              const result = await registry.upload(modelKey, file)
+              if (!result.ok) return `${modelKey}：${result.reason ?? '未知原因'}`
+              providerRef.current?.invalidate(modelKey)
+              syncRef.current?.rebuildModel(modelKey)
+              done += 1
+            }
+            setRecords([...registry.list()])
+            pushNotice({
+              text:
+                `建模组（JSON）已导入 ${String(done)} 个型号` +
+                (skippedExisting > 0 ? `，跳过 ${String(skippedExisting)} 个已有几何的（只补缺）` : ''),
+              severity: 'info',
+            })
+            return undefined
+          }
+          // ── ① 文件夹形态 ──
           const picked = files.filter((file) => /\.(glb|gltf)$/i.test(file.name))
           if (picked.length === 0) return '这个文件夹里没有 .glb / .gltf'
           let done = 0
@@ -503,6 +550,54 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
               (skippedExisting > 0 ? `，跳过 ${String(skippedExisting)} 个已有几何的（只补缺）` : ''),
             severity: 'info',
           })
+          return undefined
+        },
+        /**
+         * ★★ **导出建模组** —— 把**整套建模**存成**一个 JSON 文件**。
+         *
+         * 用户原话：「这个是直接导出**完整**建模吧，比如建模里有 abc 组合，
+         * 下次导入进来**还是一样的**，是保存那个**建模整体**」。
+         *
+         * ★ 为什么是**一个 JSON** 而不是一个文件夹：
+         *   · 浏览器的文件对话框**本来就能选保存路径**（用户："选择路径保存"）——
+         *     而"选文件夹让宿主写进去"要额外的目录选择服务，还容易失败；
+         *   · 一个文件**不会在搬运中散掉**（复制、发微信、丢进网盘都还是同一个东西）；
+         *   · 与"导出项目定义"的体验一致 —— 都是"另存为一个文件"。
+         * ★ 几何是二进制 ⇒ 用 base64 装进 JSON。整套自产模型约 150KB，base64 后仍很小。
+         */
+        onExportModelSet: async () => {
+          const registry = registryRef.current
+          if (!registry) return '模型库还没就绪'
+          const keys = registry
+            .list()
+            .map((record) => record.modelKey)
+            .filter((key): key is string => typeof key === 'string' && key !== '')
+          if (keys.length === 0) return '还没有任何模型可导出'
+          const models: { modelKey: string; glbBase64: string }[] = []
+          for (const modelKey of keys) {
+            const response = await fetch(modelItemUrl(modelKey))
+            if (!response.ok) return `读 ${modelKey} 失败：HTTP ${String(response.status)}`
+            const buffer = await response.arrayBuffer()
+            const bytes = new Uint8Array(buffer)
+            let binary = ''
+            for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i] ?? 0)
+            models.push({ modelKey, glbBase64: btoa(binary) })
+          }
+          const payload = {
+            format: 1,
+            kind: 'model-set',
+            exportedAt: new Date().toISOString(),
+            models,
+          }
+          const blob = new Blob([`${JSON.stringify(payload)}\n`], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const anchor = document.createElement('a')
+          anchor.href = url
+          anchor.download = `model-set-${String(models.length)}.json`
+          anchor.click()
+          // ★ 立刻回收：不回收的话这份 blob 会一直挂在内存里
+          URL.revokeObjectURL(url)
+          pushNotice({ text: `已导出建模组（${String(models.length)} 个型号）`, severity: 'info' })
           return undefined
         },
       }),

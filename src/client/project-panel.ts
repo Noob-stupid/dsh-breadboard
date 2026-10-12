@@ -128,6 +128,13 @@ export interface ProjectPanelProps {
   /** **导入建模组时"只补缺"**（默认关 = 换装/覆盖）。 */
   readonly onlyMissingImport: boolean
   readonly onToggleOnlyMissingImport: (value: boolean) => void
+  /**
+   * **导出建模组** —— 把整套建模存成**一个 JSON 文件**。
+   *
+   * ★ 用户原话："导出**完整**建模…建模里有 abc 组合，下次导入进来**还是一样的**"。
+   *   所以这个动作打包的是**当前模型库里的全部几何**，不是某一个型号。
+   */
+  readonly onExportModelSet: () => Promise<string | undefined>
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -703,7 +710,7 @@ export function ProjectPanel(props: ProjectPanelProps) {
             '选一个**建模组文件夹**：里面每个子文件夹名 = 型号键，子文件夹里放模型（.glb / .gltf）。\n' +
             '例：我的建模组/hc-sr501/model.glb、我的建模组/esp32-seat-sensor/model.glb',
         },
-        busy === 'model:set' ? '导入中…' : '＋ 导入建模组（选文件夹）',
+        busy === 'model:set' ? '导入中…' : '＋ 导入建模组（选文件夹 / .json）',
         h('input', {
           type: 'file',
           // ★ `webkitdirectory` 让选择框变成**选目录**而不是选文件
@@ -723,8 +730,79 @@ export function ProjectPanel(props: ProjectPanelProps) {
             })
           },
         }),
+        ),
+        // ── ★ **导出建模组（另存为一个 .json）** ──
+        //
+        //   用户原话：「这个是直接导出**完整**建模吧，比如建模里有 abc 组合，
+        //   下次导入进来**还是一样的**，是保存那个**建模整体**」
+        //   ⇒ 打包的是**当前模型库里的全部几何**，一个文件装走、一个文件导回。
+        //
+        //   ⚠️ 为什么**不能**复用上面那个导入控件：它带 `webkitdirectory`，
+        //     系统对话框被限定成"选文件夹"，**选不到单个 .json**。
+        //     ⇒ 导入/导出各一个控件，各自 accept 各自的形态。
+        h(
+          'button',
+          {
+            type: 'button',
+            disabled: props.disabled || busy !== undefined,
+            onClick: () => {
+              setBusy('model:export')
+              void props.onExportModelSet().then((error) => {
+                setBusy(undefined)
+                if (error !== undefined) setFailure(`导出建模组失败：${error}`)
+              })
+            },
+            style: {
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px solid rgba(120, 170, 200, 0.4)',
+              background: 'rgba(36, 56, 76, 0.9)',
+              color: 'inherit',
+              font: 'inherit',
+              fontSize: '11px',
+              cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
+            },
+            title:
+              '把**当前模型库里的全部建模**打包成**一个 .json 文件**（几何以 base64 装在里面）。\n' +
+              '保存位置在弹出的对话框里选；下次用「导入建模组（.json）」即可原样导回。',
+          },
+          busy === 'model:export' ? '导出中…' : '⤓ 导出建模组（存成一个 .json）',
+        ),
+        // ── ★ **导入建模组（.json）** —— 与上面"选文件夹"是两条路 ──
+        h(
+          'label',
+          {
+            style: {
+              display: 'block',
+              textAlign: 'center',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px dashed rgba(120, 140, 170, 0.45)',
+              background: 'rgba(30, 38, 50, 0.9)',
+              fontSize: '11px',
+              cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
+            },
+            title: '导入「导出建模组」产出的那个 .json（一整套几何原样回来）',
+          },
+          busy === 'model:json' ? '导入中…' : '＋ 导入建模组（选 .json）',
+          h('input', {
+            type: 'file',
+            accept: '.json,application/json',
+            disabled: props.disabled || busy !== undefined,
+            style: { display: 'none' },
+            onChange: (event: { target?: { files?: FileList | null } }) => {
+              const files = Array.from(event.target?.files ?? [])
+              if (files.length === 0) return
+              setBusy('model:json')
+              void props.onImportModelSet(files).then((error) => {
+                setBusy(undefined)
+                if (error !== undefined) setFailure(`建模组导入失败：${error}`)
+                else setNonce((n) => n + 1)
+              })
+            },
+          }),
+        ),
       ),
-    ),
   )
 
   // ★★ 空态提示 —— **条件必须是 `projects.length`，不能是 `body.length`**
