@@ -97,7 +97,11 @@ jobs:
           set -euo pipefail
           TGZ=$(ls dist/*.tgz | head -n1)
           echo "发布：$TGZ"
-          npm publish "$TGZ" --access public
+          # ⚠️ 前面必须有 `./` —— 否则 npm 把 `dist/xxx.tgz` 当成 **GitHub 简写**
+          #    （owner/repo），于是去跑 `git ls-remote ssh://git@github.com/dist/...`，
+          #    报一个看起来完全无关的 `Permission denied (publickey)`。
+          #    这是实测踩出来的（run 38248782189）。
+          npm publish "./$TGZ" --access public
           # 发布后核对：registry 上确实有这一版（否则"成功"只是本地打印）
           NAME=$(node -e "console.log(require('./package.json').name)" 2>/dev/null || true)
           VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || true)
