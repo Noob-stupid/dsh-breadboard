@@ -1,6 +1,6 @@
 {
   "name": "@noob-stupid/dsh-breadboard",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "author": {
     "name": "dsh-breadboard",
     "url": "https://github.com/Noob-stupid/dsh-breadboard"
@@ -42,7 +42,6 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "link": "node scripts/link-deps.mjs",
-    "postinstall": "node scripts/link-deps.mjs",
     "prepare": "node scripts/prepare.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:client": "tsc -p tsconfig.client.json --noEmit",
