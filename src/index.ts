@@ -409,6 +409,39 @@ export function apply(ctx: AppContext, config: Config): void {
     }
   })()
 
+  // ── **数据驱动的型号定义**（P0）─────────────────────────────────────────
+  //
+  //  ★★ 为什么要有这一步：内置型号是硬编码 TS ⇒ "加一块新板子" = 改代码 + 重新构建 + 发版，
+  //     而别人（第三方）根本没法加自己手上的板子 ⇒ 生态不可能形成。
+  //     用户给这个插件的最终目的是"**基本上所有硬件都能适配通用**"，
+  //     我们不可能自己适配所有硬件 ⇒ 必须做到"**只加一条数据**"。
+  //
+  //  ★ 加载两个目录（**汇总后一次注册**，避免后一个目录丢掉前一个）：
+  //    · 插件包内 `model-defs/`  —— 我们随包发的型号数据
+  //    · 用户目录 `model-defs/`  —— 用户/第三方自己加的（**内置不可被覆盖**）
+  //
+  //  ⚠️ 失败必须可见：坏文件、JSON 语法错、与内置撞名的，全部打日志说清是哪个文件、为什么。
+  //     否则用户会陷入"我明明加了却没生效"——那正是最难查的一类。
+  void (async () => {
+    const { fileURLToPath } = await import('node:url')
+    const { readdir, readFile } = await import('node:fs/promises')
+    const { loadModelDefs } = await import('./core/models/definitions.ts')
+    const packagedDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'model-defs')
+    const userDir = path.join(dshHome, 'dsh-hardware-sandbox', 'model-defs')
+    const result = await loadModelDefs(
+      [packagedDir, userDir],
+      {
+        listJson: async (dir) =>
+          (await readdir(dir)).filter((name) => name.endsWith('.json')).map((name) => path.join(dir, name)),
+        readText: (file) => readFile(file, 'utf8'),
+      },
+      log,
+    )
+    if (result.registered.length === 0 && result.failures.length === 0 && result.rejected.length === 0) {
+      log('外部型号定义：没有（用户目录 model-defs/ 可以放自己的 *.json）')
+    }
+  })()
+
   // step.parts 客户端 —— 唯一「公共 API + 免鉴权 + 直接给 GLB」的来源（见 docs/05）。
   // ★ 上限与存储一致：**下载前按元数据判定**，超限的根本不去下。
   const stepParts = new StepPartsClient({ maxBytes: MODEL_MAX_BYTES })

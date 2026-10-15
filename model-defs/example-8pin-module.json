@@ -1,0 +1,43 @@
+{
+  "_readme": [
+    "★ 这是**外部型号定义**的示例文件 —— 演示「只加一条数据就能加一块板子」。",
+    "  把它复制到 ~/.dsh/dsh-hardware-sandbox/model-defs/ 即可加载（内置型号不可被覆盖）。",
+    "",
+    "字段说明：",
+    "  key    型号键（小写字母/数字/连字符）。它是**身份**，前端按它加载几何。",
+    "  label  界面上显示的名字。",
+    "  size   包围盒尺寸，单位**米**（不是毫米）。",
+    "  ports  端口表。**每个引脚一条**，portId 必须唯一（不能按功能命名 —— 一块板有多个 GND）。",
+    "         portId = 身份（如 P1…P8）；name = 丝印（人能读的那行字，可重复）。",
+    "         protocol: i2c | spi | uart | gpio | power",
+    "         direction: power(只出) | ground(地) | io(可进可出) | in | out",
+    "         voltage: 伏。**0 是合法的**（那是 GND，不是没填）。",
+    "  portLayout  声明式排布（二选一：给 portLayout 或给每个 port 的 position）。",
+    "         edge: 贴哪条边排（+z ⇒ 行沿 x 轴）；pitch: 间距(米)；count 必须等于 ports 长度；",
+    "         inset: 距该边的内缩(米)；rows/rowPitch: 双排排针用（如 2×20）。",
+    "",
+    "⚠️ 写真实板子时：**引脚表要有权威来源**（厂商数据手册 / PlatformIO 的 variant 文件 /",
+    "   CubeMX 数据库）。**手打错的引脚表比没有更坏** —— 它会产出「看起来对但接错脚」的校验。"
+  ],
+  "key": "example-8pin-module",
+  "label": "示例模块（8 针，演示数据驱动）",
+  "size": { "x": 0.021, "y": 0.003, "z": 0.016 },
+  "powerDrawW": 0,
+  "powerSupplyW": 0,
+  "ports": [
+    { "portId": "P1", "name": "VCC", "protocol": "power", "voltage": 3.3, "direction": "in" },
+    { "portId": "P2", "name": "GND", "protocol": "power", "voltage": 0, "direction": "ground" },
+    { "portId": "P3", "name": "SCL", "protocol": "i2c", "voltage": 3.3, "direction": "in" },
+    { "portId": "P4", "name": "SDA", "protocol": "i2c", "voltage": 3.3, "direction": "io" },
+    { "portId": "P5", "name": "XDA", "protocol": "i2c", "voltage": 3.3, "direction": "io" },
+    { "portId": "P6", "name": "XCL", "protocol": "i2c", "voltage": 3.3, "direction": "out" },
+    { "portId": "P7", "name": "AD0", "protocol": "gpio", "voltage": 3.3, "direction": "in" },
+    { "portId": "P8", "name": "INT", "protocol": "gpio", "voltage": 3.3, "direction": "out" }
+  ],
+  "portLayout": {
+    "edge": "+z",
+    "pitch": 0.00254,
+    "count": 8,
+    "inset": 0.001
+  }
+}

@@ -20,7 +20,8 @@
     "skill",
     "docs",
     "models",
-    "scripts"
+    "scripts",
+    "model-defs"
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {

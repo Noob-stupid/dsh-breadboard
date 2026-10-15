@@ -452,8 +452,13 @@ const MPL3115A2_SIZE: Vec3 = { x: 0.01905, y: 0.0026, z: 0.01778 }
  *
  * ★ `order` 表达的是**几何顺序**（从负方向到正方向），不是声明顺序 ——
  *   这两者在本表里**确实不同**，见文件头的警告。
+ *
+ * ★ 导出它（而不是只导出解析后的 `HARDWARE_MODELS`）是为了让测试能做
+ *   **往返验证**：把每条作者时定义当成**外部 JSON 数据**再解析一遍，
+ *   结果必须与内置的完全一致 —— 否则"只加数据就能加板子"就是假的。
+ *   见 `tests/model-def.test.ts`。
  */
-const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
+export const SOURCES: Readonly<Record<string, HardwareModelSource>> = {
   'rpi-4b': {
     key: 'rpi-4b',
     label: 'Raspberry Pi 4B',
@@ -823,14 +828,44 @@ export const HARDWARE_MODELS: Readonly<Record<string, HardwareModel>> = Object.f
   Object.fromEntries(Object.entries(SOURCES).map(([key, source]) => [key, resolveModel(source)])),
 )
 
-/** 查型号。未知型号返回 undefined（调用方据此发 `unknown_hardware_model` 警告）。 */
-export function findModel(key: string): HardwareModel | undefined {
-  return HARDWARE_MODELS[key]
+/**
+ * **外部（数据驱动）型号表** —— 由 `core/models/definitions.ts` 在启动时装上。
+ *
+ * ★★ 为什么需要这一层：内置型号是**硬编码 TS**，于是"加一块新板子" =
+ *   改代码 + 重新构建 + 重新发版；而用户给这个插件的最终目的是
+ *   **基本上所有硬件都能适配通用** —— 我们不可能自己适配所有硬件，
+ *   所以必须能做到"**只加一条数据**"（判据 L1，见 `docs/08-硬件在环日程.md`）。
+ *
+ * ★ 为什么用这个"可变槽"而不是让本文件 import 注册表：
+ *   那会造成 `library.ts ↔ definitions.ts` **循环依赖**。装配层被到处引用，
+ *   循环依赖在 ESM 下的失败是"有时能跑、有时拿到 undefined"——
+ *   正是本项目最怕的那类**偶发**故障。改成单向（core → contracts）就没有这个问题。
+ *
+ * ★ **内置优先**：查找时先查内置，外部表只在**内置没有这个键**时生效。
+ *   覆盖内置被 `buildRegistry()` 在注册阶段直接拒绝（见那个文件里的说明）。
+ */
+let externalModels: Readonly<Record<string, HardwareModel>> = {}
+
+/** 装上外部型号表（由 core 层调用）。传空对象 = 清空。 */
+export function setExternalModels(next: Readonly<Record<string, HardwareModel>>): void {
+  externalModels = next
 }
 
-/** 全部预置型号键。 */
+/** 查型号。未知型号返回 undefined（调用方据此发 `unknown_hardware_model` 警告）。 */
+export function findModel(key: string): HardwareModel | undefined {
+  // ★ 内置优先 —— 顺序不能反（反了等于允许外部悄悄改掉内置型号）
+  return HARDWARE_MODELS[key] ?? externalModels[key]
+}
+
+/** 全部可用型号键：内置在前，外部在后（同名不会重复）。 */
 export function modelKeys(): string[] {
-  return Object.keys(HARDWARE_MODELS)
+  const externalOnly = Object.keys(externalModels).filter((key) => HARDWARE_MODELS[key] === undefined)
+  return [...Object.keys(HARDWARE_MODELS), ...externalOnly]
+}
+
+/** 这个键是**外部（数据驱动）**加进来的吗 —— 界面据此标注来源。 */
+export function isExternalModel(key: string): boolean {
+  return HARDWARE_MODELS[key] === undefined && externalModels[key] !== undefined
 }
 
 /** 让组件「平放在地面」时应当使用的高度（y = 半厚）。见文件头的原点约定。 */
