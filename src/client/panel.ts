@@ -17,7 +17,7 @@
  */
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { HTTP_ROUTES, MODEL_ROUTES, modelItemUrl } from '../contracts/protocol.ts'
-import type { ImportModelResult, ImportedModelRecord } from '../contracts/protocol.ts'
+import type { ImportModelResult, ImportedModelRecord, ObserveView } from '../contracts/protocol.ts'
 import { SceneHost } from '../scene/host.ts'
 import { PortTooltip } from './port-tooltip.ts'
 import { PerfMeter } from './perf-meter.ts'
@@ -32,6 +32,7 @@ import {
   HardwarePalette,
   ImportControls,
   NoticeBar,
+  ObservePanel,
   type ContextMenuItem,
   type ModelTableEntry,
 } from './hud.ts'
@@ -78,6 +79,14 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
    * ★ 初值取空数组：拉回来之前列表是空的（**短暂空白好过显示一份错的表**）。
    */
   const [models, setModels] = useState<readonly ModelTableEntry[]>([])
+  /**
+   * **正在观察的真机**（`GET /api/observe`）。
+   *
+   * ★ 只读宿主的缓存 —— 轮询真机的**只有宿主一个**（墙钟），
+   *   前端自己再去问一遍会把对方服务器打两遍，两份状态还会不一致。
+   * ★ 刷新间隔用**墙钟**（`setInterval`），与真机的时间尺度一致。
+   */
+  const [observing, setObserving] = useState<readonly ObserveView[]>([])
   /**
    * **项目本体扫描报告** —— 用户工作流第②步的产物。
    *
@@ -131,6 +140,33 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
     })()
     return () => {
       alive = false
+    }
+  }, [])
+
+  // ── 真机观察：读宿主缓存（墙钟轮询）──────────────────────────────────
+  //
+  //  ★ 为什么由前端定时拉：宿主是**唯一**轮询真机的一方，
+  //    前端只读它的缓存 ⇒ 不会把对方服务器打两遍。
+  //  ★ 用 `setInterval`（**墙钟**）：真机按真实时间走，与虚拟时钟无关。
+  //  ★ 失败**不刷屏**：这是每 2 秒一次的轮询，失败时保持上一次的显示，
+  //    不弹提示（否则每 2 秒弹一次，界面没法用）。
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const response = await fetch(HTTP_ROUTES.observe)
+        if (!response.ok) return
+        const payload = (await response.json()) as { observing?: ObserveView[] }
+        if (alive) setObserving(payload.observing ?? [])
+      } catch {
+        // 宿主暂时读不到：保持上一次显示（不闪、不刷屏）
+      }
+    }
+    void load()
+    const handle = window.setInterval(() => void load(), 2000)
+    return () => {
+      alive = false
+      window.clearInterval(handle)
     }
   }, [])
 
@@ -687,6 +723,47 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
         onRemove: (modelKey) => void handleRemove(modelKey),
         disabled: !ready,
       }),
+      // ★ ④ **真机观察**（P1b）：显示真机状态，并能从界面开始/停止。
+      //   轮询真机的是宿主（墙钟），界面只读它的缓存。
+      createElement(ObservePanel, {
+        observing,
+        // ★ 只列**有端口/真实型号**的器件？不 —— 观察的是**器件身份**，
+        //   与有没有几何无关；全列出来，让用户自己选。
+        components: (channelRef.current?.latest()?.components ?? []).map((component) => ({
+          id: component.id,
+          label: component.hardwareModel,
+        })),
+        disabled: !ready,
+        onStart: async (input) => {
+          try {
+            const response = await fetch(HTTP_ROUTES.observe, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ op: 'start', ...input }),
+            })
+            const body = (await response.json()) as { ok?: boolean; reason?: string }
+            if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
+            return undefined
+          } catch (error) {
+            return String(error)
+          }
+        },
+        onStop: async (componentId) => {
+          try {
+            const response = await fetch(HTTP_ROUTES.observe, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ op: 'stop', componentId }),
+            })
+            const body = (await response.json()) as { ok?: boolean; reason?: string }
+            if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
+            return undefined
+          } catch (error) {
+            return String(error)
+          }
+        },
+      }),
+
       // ★ 性能尺子的开关。
       //   为什么放在这里而不是藏起来：**用户找不到的尺子等于没有尺子。**
       //   为什么默认关：用户明确要求「尽量不占用大面积」——架在架子上，不是贴在墙上。

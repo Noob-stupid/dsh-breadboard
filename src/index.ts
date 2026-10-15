@@ -38,6 +38,8 @@ import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
 import { createObserveTools } from './host/observe-tools.ts'
 import { RealDeviceObserver } from './core/sim/observer.ts'
+import { zhizuoObserveConfig } from './core/sim/zhizuo-observe.ts'
+import type { ObserveView } from './contracts/protocol.ts'
 import type { ProjectStatus } from './contracts/projects.ts'
 import { createFetchTransport } from './host/fetch-transport.ts'
 import { createChatSender, type AgentsLike } from './host/chat.ts'
@@ -282,6 +284,20 @@ export function apply(ctx: AppContext, config: Config): void {
    *   拿到的是 TDZ 里的 `undefined`，一调用就抛 —— 而**抛在路由里 = 界面永远转圈**。
    */
   let projectStatusProvider: (() => Promise<readonly ProjectStatus[]>) | undefined
+
+  /**
+   * **真机观察状态的惰性取数口**（给界面路由用）。
+   *
+   * ★ 与 `projectStatusProvider` 同一个理由：`RealDeviceObserver` 建得比路由晚，
+   *   路由直接引用会拿到 TDZ 里的 `undefined` ⇒ **抛在路由里 = 界面永远转圈**。
+   * ★ 类型用 `ObserveView[]`（界面视图）而不是宿主内部结构：
+   *   路由只该转出**界面需要的那几个字段**，不该把内部状态整份漏出去。
+   */
+  let observeProvider: (() => readonly ObserveView[]) | undefined
+  /** 观察命令面（start/stop）的惰性实现 —— 理由同上。 */
+  let observeControlProvider:
+    | ((body: Record<string, unknown>) => Promise<{ readonly ok: boolean; readonly reason?: string }>)
+    | undefined
 
 
   /**
@@ -555,6 +571,15 @@ export function apply(ctx: AppContext, config: Config): void {
       //   两者一起给，是因为"校验 → 写盘 → 重载"是一条链：
       //   只给目录不给重载，就会出现"写进去了但没生效"（用户以为加上了）。
       modelDefs: { dir: modelDefsUserDir, reload: reloadModelDefs },
+      // ★ **真机观察状态**给界面（只读）。轮询真机的只有宿主一个 ——
+      //   前端再问一遍会把对方服务器打两遍，两份状态还会不一致。
+      // ⚠️ 走**惰性 provider**：观察器建得比路由晚（见上面的声明处说明）。
+      observe: () => observeProvider?.() ?? [],
+      // ★ 界面按钮用的**命令面**（只认 start/stop）。与只读面分开：
+      //   读与写混在一个函数里，会让只读路由悄悄获得写能力。
+      // ⚠️ 走**惰性 provider**：观察器建得比路由晚（同 observeProvider）
+      observeControl: (body) =>
+        observeControlProvider?.(body) ?? Promise.resolve({ ok: false, reason: '观察器还没就绪' }),
       ...(searcher !== undefined ? { search: searcher } : {}),
       ...(chatSender !== undefined ? { chat: chatSender } : {}),
       // ★ 项目状态给界面用（"智座连通了没有"）。与 hw_list_projects **同一个函数**。
@@ -790,6 +815,56 @@ export function apply(ctx: AppContext, config: Config): void {
       },
       'dsh-breadboard: real-device-observer',
     )
+    // ★ 观察器就位 ⇒ 现在界面可以真读到状态了（与 projectStatusProvider 同一手法）
+    observeProvider = () =>
+      observer.list().map((entry) => {
+        const device = entry.device
+        return {
+          componentId: device.componentId,
+          deviceId: device.deviceId,
+          status: device.status,
+          readings: device.readings,
+          polls: entry.polls,
+          failures: entry.failures,
+          ...(device.dataAgeSec !== undefined ? { dataAgeSec: device.dataAgeSec } : {}),
+          ...(device.lastSuccessAt !== undefined ? { lastSuccessAt: device.lastSuccessAt } : {}),
+          ...(device.detail !== undefined ? { detail: device.detail } : {}),
+        }
+      })
+    // ★ 命令面（界面按钮）：只认 start/stop。与工具**同一条校验** ——
+    //   观察一个不存在的器件 id 不会报错、只会静默无效，所以这里必须拦。
+    observeControlProvider = async (body) => {
+      const op = typeof body.op === 'string' ? body.op : ''
+      const componentId = typeof body.componentId === 'string' ? body.componentId : ''
+      if (componentId === '') return { ok: false, reason: '缺少 componentId' }
+      if (op === 'stop') {
+        observer.stop(componentId)
+        return { ok: true }
+      }
+      if (op !== 'start') return { ok: false, reason: `未知操作：${op}` }
+      const components = state.snapshot().components.map((component) => component.id)
+      if (!components.includes(componentId)) {
+        return {
+          ok: false,
+          reason: `场景里没有器件 ${componentId}（现有：${components.join(', ') === '' ? '空' : components.join(', ')}）`,
+        }
+      }
+      const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
+      const endpoint = typeof body.endpoint === 'string' ? body.endpoint : ''
+      if (deviceId === '' || endpoint === '') return { ok: false, reason: 'start 需要 deviceId 与 endpoint' }
+      const intervalMs = typeof body.intervalMs === 'number' ? body.intervalMs : 5000
+      const cookie = typeof body.cookie === 'string' && body.cookie !== '' ? body.cookie : undefined
+      observer.start(
+        zhizuoObserveConfig({
+          componentId,
+          deviceId,
+          endpoint,
+          intervalMs,
+          ...(cookie !== undefined ? { headers: { cookie } } : {}),
+        }),
+      )
+      return { ok: true }
+    }
 
     const toolRegistry = ctx.get?.('tools') as ToolRegistryLike | undefined
     if (toolRegistry === undefined) {

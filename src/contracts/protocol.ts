@@ -65,7 +65,38 @@ export const HTTP_ROUTES = {
    *   ⇒ 用 `/api/catalog`（型号目录），与存储路由的前缀彻底错开。
    */
   modelCatalog: `${ROUTE_PREFIX}/api/catalog`,
+  /**
+   * GET → **当前正在观察的真机状态**（`ObserveView[]`）。
+   *
+   * ★★ 为什么由**宿主**给、而不是让前端自己去问真机：
+   *   轮询真机/外部系统的活儿已经由宿主按**墙钟**在做（`RealDeviceObserver`）。
+   *   前端再去问一遍等于**把对方服务器打两遍**，而且两份状态会不一致。
+   *   ⇒ 前端只读宿主的**缓存**，宿主是唯一的轮询者。
+   *
+   * ★ 前端按自己的节奏刷新即可（读本地宿主，无外部副作用）。
+   */
+  observe: `${ROUTE_PREFIX}/api/observe`,
 } as const
+
+/**
+ * 真机观察的**界面视图**（`GET /api/observe` 的载荷）。
+ *
+ * ★ 与 `ObservedDevice` 分开：那个是宿主内部状态，这个是**给界面看的**，
+ *   少一些内部字段（如 mapping/headers），多一些**人能读的东西**。
+ * ★ `status` 的五个值**含义不同**（见 `contracts/observe.ts`）——
+ *   界面**必须**分开显示，尤其不能把 `error` 说成"离线"。
+ */
+export interface ObserveView {
+  readonly componentId: string
+  readonly deviceId: string
+  readonly status: 'idle' | 'ok' | 'stale' | 'error' | 'not_found'
+  readonly readings: Readonly<Record<string, boolean>>
+  readonly polls: number
+  readonly failures: number
+  readonly dataAgeSec?: number
+  readonly lastSuccessAt?: string
+  readonly detail?: string
+}
 
 /** WebSocket 升级路由（`ctx.webServer.registerUpgrade`）。前端订阅事件流。 */
 export const WS_ROUTE = `${ROUTE_PREFIX}/ws` as const

@@ -8,7 +8,7 @@ import { createElement, useRef, useState, type ReactNode } from 'react'
 import { HARDWARE_MODELS } from '../contracts/library.ts'
 import { MODEL_SOURCES, searchQueryFor, sourceUrl, type ModelSource } from '../contracts/model-sources.ts'
 import { MODEL_ROUTES, looksLikeModelFile } from '../contracts/protocol.ts'
-import type { ImportedModelRecord, ModelCandidate, ModelSearchResult } from '../contracts/protocol.ts'
+import type { ImportedModelRecord, ModelCandidate, ModelSearchResult, ObserveView } from '../contracts/protocol.ts'
 import type { Notice } from '../scene/interaction.ts'
 
 /**
@@ -228,6 +228,222 @@ const BUTTON_STYLE = {
   font: 'inherit',
   cursor: 'pointer',
 } as const
+
+/**
+ * ④ **真机观察面板**（P1b）—— 让"真机在环"在**界面上**看得见。
+ *
+ * ★★ 五态**必须分开显示**（`contracts/observe.ts` 里那张表）：
+ *   尤其 `error`（我们查不到）**绝不能说成"设备离线"** ——
+ *   那会让人去拔插硬件，而真正的问题是地址写错/没登录。
+ *
+ * ★ 面板是**只读展示 + 开关**：轮询真机的只有宿主一个（墙钟），
+ *   界面只读宿主缓存 ⇒ 不会把对方服务器打两遍。
+ */
+export function ObservePanel(props: {
+  readonly observing: readonly ObserveView[]
+  /** 场景里的器件（开始观察时选）。 */
+  readonly components: readonly { readonly id: string; readonly label: string }[]
+  readonly onStart: (input: {
+    readonly componentId: string
+    readonly deviceId: string
+    readonly endpoint: string
+    readonly intervalMs: number
+    readonly cookie?: string
+  }) => Promise<string | undefined>
+  readonly onStop: (componentId: string) => Promise<string | undefined>
+  readonly disabled?: boolean
+}) {
+  const [componentId, setComponentId] = useState<string>(props.components[0]?.id ?? '')
+  const [deviceId, setDeviceId] = useState('')
+  const [endpoint, setEndpoint] = useState('http://127.0.0.1:5800')
+  const [intervalMs, setIntervalMs] = useState(5000)
+  const [cookie, setCookie] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+
+  const inputStyle = {
+    padding: '3px 5px',
+    borderRadius: '4px',
+    border: '1px solid rgba(120, 140, 170, 0.35)',
+    background: 'rgba(10, 14, 20, 0.9)',
+    color: 'inherit',
+    font: 'inherit',
+    fontSize: '11px',
+    width: '100%',
+  } as const
+
+  const rows = props.observing.map((item) => {
+    // ★ 措辞按状态分开 —— 这是这个面板存在的全部意义
+    const view =
+      item.status === 'ok'
+        ? { text: '✅ 真机在线', color: '#7ee0a0' }
+        : item.status === 'stale'
+          ? { text: `⚠️ 真机离线（数据 ${String(Math.round(item.dataAgeSec ?? 0))} 秒前）`, color: '#ffc46b' }
+          : item.status === 'error'
+            ? { text: '❌ 观察失败（不代表设备离线，先查地址/鉴权）', color: '#ff9b9b' }
+            : item.status === 'not_found'
+              ? { text: '⚠️ 服务端里没有这台设备（deviceId 写错？或它还没上过线）', color: '#ffc46b' }
+              : { text: '— 还没查到', color: 'rgba(200,210,225,0.55)' }
+    const readings = Object.entries(item.readings)
+      .map(([key, value]) => `${key}=${value ? '遮挡' : '无人'}`)
+      .join(' · ')
+    return createElement(
+      'div',
+      {
+        key: item.componentId,
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '3px',
+          padding: '6px 7px',
+          borderRadius: '6px',
+          background: 'rgba(8, 11, 16, 0.92)',
+          border: '1px solid rgba(120, 140, 170, 0.22)',
+        },
+      },
+      createElement('div', { style: { fontSize: '11px', fontWeight: 600 } }, `${item.componentId} ← ${item.deviceId}`),
+      createElement('div', { style: { fontSize: '10px', color: view.color, lineHeight: 1.4 } }, view.text),
+      readings === '' ? null : createElement('div', { style: { fontSize: '10px', opacity: 0.85 } }, `读数：${readings}`),
+      createElement(
+        'div',
+        { style: { fontSize: '9px', opacity: 0.5 } },
+        `轮询 ${String(item.polls)} 次 · 失败 ${String(item.failures)} 次${item.detail === undefined ? '' : ` · ${item.detail}`}`,
+      ),
+      createElement(
+        'button',
+        {
+          type: 'button',
+          disabled: props.disabled === true || busy,
+          onClick: () => {
+            setBusy(true)
+            void props.onStop(item.componentId).then((error) => {
+              setBusy(false)
+              if (error !== undefined) setFailure(error)
+            })
+          },
+          style: {
+            alignSelf: 'flex-start',
+            padding: '2px 7px',
+            borderRadius: '4px',
+            border: '1px solid rgba(120, 140, 170, 0.35)',
+            background: 'rgba(30, 38, 50, 0.9)',
+            color: 'inherit',
+            font: 'inherit',
+            fontSize: '10px',
+            cursor: 'pointer',
+          },
+        },
+        '停止观察',
+      ),
+    )
+  })
+
+  return createElement(
+    Panel,
+    {
+      title: '④ 真机观察',
+      subtitle: '只读：我们去看真机，不发任何指令',
+      // ★ 默认收起（与 ①② 一致）：三个面板全展开会占掉半个屏幕
+      defaultOpen: false,
+    },
+    createElement(
+      'div',
+      { style: { fontSize: '10px', opacity: 0.75, lineHeight: 1.5 } },
+      '让场景里的器件反映真实硬件的状态：真机 → 服务端 → 插件（只读）。',
+    ),
+    rows.length === 0
+      ? createElement(
+          'div',
+          { style: { fontSize: '10px', opacity: 0.6, lineHeight: 1.5 } },
+          '还没有在观察真机。下面填真机标识与外部系统地址即可开始（也可以让 agent 用 hw_watch_device）。',
+        )
+      : createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '5px' } }, ...rows),
+    // ── 开始观察的表单 ──
+    createElement(
+      'div',
+      { style: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' } },
+      createElement(
+        'select',
+        {
+          value: componentId,
+          onChange: (event: { target?: { value?: string } }) => setComponentId(event.target?.value ?? ''),
+          style: inputStyle,
+          title: '观察哪个器件（对应场景里的组件）',
+        },
+        ...props.components.map((component) =>
+          createElement('option', { key: component.id, value: component.id }, `${component.id} · ${component.label}`),
+        ),
+      ),
+      createElement('input', {
+        value: deviceId,
+        placeholder: '真机标识（智座是 WiFi MAC，如 AA:BB:CC:11:22:33）',
+        onChange: (event: { target?: { value?: string } }) => setDeviceId(event.target?.value ?? ''),
+        style: inputStyle,
+      }),
+      createElement('input', {
+        value: endpoint,
+        placeholder: '外部系统地址（如 http://127.0.0.1:5800）',
+        onChange: (event: { target?: { value?: string } }) => setEndpoint(event.target?.value ?? ''),
+        style: inputStyle,
+      }),
+      createElement(
+        'select',
+        {
+          value: String(intervalMs),
+          onChange: (event: { target?: { value?: string } }) => setIntervalMs(Number(event.target?.value ?? 5000)),
+          style: inputStyle,
+          title: '轮询间隔（墙钟）—— 真机按真实时间走、不能加速；下限 2 秒',
+        },
+        ...[2000, 5000, 10000, 30000].map((ms) =>
+          createElement('option', { key: String(ms), value: String(ms) }, `每 ${String(ms / 1000)} 秒查一次`),
+        ),
+      ),
+      createElement('input', {
+        value: cookie,
+        placeholder: '可选：需要登录时的 Cookie（智座 admin 接口需要）',
+        onChange: (event: { target?: { value?: string } }) => setCookie(event.target?.value ?? ''),
+        style: inputStyle,
+      }),
+      createElement(
+        'button',
+        {
+          type: 'button',
+          disabled: props.disabled === true || busy || componentId === '' || deviceId === '' || endpoint === '',
+          onClick: () => {
+            setBusy(true)
+            setFailure(undefined)
+            void props
+              .onStart({
+                componentId,
+                deviceId,
+                endpoint,
+                intervalMs,
+                ...(cookie === '' ? {} : { cookie }),
+              })
+              .then((error) => {
+                setBusy(false)
+                if (error !== undefined) setFailure(error)
+              })
+          },
+          style: {
+            padding: '5px 8px',
+            borderRadius: '6px',
+            border: '1px solid rgba(150, 200, 150, 0.45)',
+            background: 'rgba(28, 40, 32, 0.9)',
+            color: 'inherit',
+            font: 'inherit',
+            fontSize: '11px',
+            cursor: 'pointer',
+          },
+        },
+        busy ? '处理中…' : '开始观察（只读）',
+      ),
+      failure === undefined
+        ? null
+        : createElement('div', { style: { fontSize: '10px', color: '#ff9b9b', lineHeight: 1.4 } }, failure),
+    ),
+  )
+}
 
 export interface ImportControlsProps {
   readonly records: readonly ImportedModelRecord[]

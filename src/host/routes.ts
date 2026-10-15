@@ -16,6 +16,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket } from 'ws'
 
+import type { ObserveView } from '../contracts/protocol.ts'
+import type { ObservedDevice } from '../contracts/observe.ts'
 import type { ProjectStatus } from '../contracts/projects.ts'
 import type { ProjectBody, ProjectScanOutcome } from '../core/projects/store.ts'
 import { HARDWARE_MODELS, findModel, isExternalModel, modelKeys } from '../contracts/library.ts'
@@ -89,6 +91,26 @@ export interface RouteDeps {
     readonly dir: string
     readonly reload: () => Promise<ModelDefLoadResult>
   }
+  /**
+   * **真机观察的当前状态**（界面读它）。省略则不注册 observe 路由。
+   *
+   * ★ 交的是**一个取数函数**而不是观察器本身：路由不该能启动/停止观察 ——
+   *   那是工具与界面动作的事。**只读面越小，越不容易被误用**。
+   * ★ 返回 `ObserveView[]`（界面视图），不是宿主内部结构：
+   *   路由只该转出界面需要的那几个字段。
+   */
+  readonly observe?: () => readonly ObserveView[]
+  /**
+   * **真机观察的命令面**（界面按钮用：start / stop）。
+   *
+   * ★ 与上面的只读 `observe` 分开：读与写是两件事，
+   *   混在一个函数里会让"只读路由"悄悄获得写能力。
+   * ★ 命令面只认两种动作（start/stop），**不是**把观察器整个交出去 ——
+   *   界面不需要、也不该能 dispose 观察器。
+   */
+  readonly observeControl?: (
+    body: Record<string, unknown>,
+  ) => Promise<{ readonly ok: boolean; readonly reason?: string }>
   /** 用户导入模型的存储。省略则模型路由不注册。 */
   readonly models?: ModelStore
   /** 搜索能力。省略则搜索路由不注册（界面应降级为"只给外链"）。 */
@@ -456,6 +478,30 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
         } catch (error) {
           sendJson(res, 500, { ok: false, reason: `写入失败：${String(error)}` })
         }
+      },
+    },
+    // ── **真机观察状态**（界面用）─────────────────────────────────────────
+    //
+    //  ★ 前端只读宿主缓存：**轮询真机的只有宿主一个**（墙钟），
+    //    前端再问一遍会把对方服务器打两遍，而且两份状态会不一致。
+    {
+      kind: 'exact',
+      path: HTTP_ROUTES.observe,
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method === 'POST') {
+          // ★ 写操作走**独立的命令面**：只读路由不该悄悄获得写能力
+          const face = deps.observeControl
+          if (face === undefined) {
+            sendJson(res, 501, { ok: false, reason: '这个宿主没开放观察命令面' })
+            return
+          }
+          const body = asRecord(await readJsonBody(req))
+          const result = await face(body)
+          sendJson(res, result.ok ? 200 : 400, result)
+          return
+        }
+        // 宿主已经是**唯一**的轮询者，这里只是把它缓存的状态转出去（前端读本地，无外部副作用）
+        sendJson(res, 200, { observing: deps.observe?.() ?? [] })
       },
     },
     {
