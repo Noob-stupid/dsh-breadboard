@@ -203,6 +203,55 @@ export function applyRegistry(models: Readonly<Record<string, ReturnType<typeof 
   setExternalModels(models)
 }
 
+/* ─────────────────────────── 安装一条定义（唯一出处） ─────────────────────────── */
+
+/** 安装结果。`file` 只在成功时有意义。 */
+export interface ModelDefInstallResult {
+  readonly ok: boolean
+  readonly key?: string
+  readonly file?: string
+  readonly reason?: string
+  readonly outcome?: ModelDefLoadResult
+}
+
+/**
+ * **安装一条型号定义**：校验 → 撞内置检查 → 落盘 → 立即重载。
+ *
+ * ★★ 顺序是刻意的：**先校验、再落盘**。反过来会把坏定义留在用户目录里 ——
+ *   下次启动照样加载、照样失败，**而用户以为"我加过了"**（最难查的一类）。
+ *
+ * ★ 抽成**唯一出处**：界面路由与 agent 工具都要"装一条定义"，
+ *   各写一份迟早漂移（典型症状：一边能装、另一边的报错方式不同）。
+ */
+export async function installModelDefinition(input: {
+  readonly dir: string
+  readonly reload: () => Promise<ModelDefLoadResult>
+  readonly definition: unknown
+  readonly writeFile: (file: string, text: string) => Promise<void>
+  readonly mkdir: (dir: string) => Promise<void>
+  readonly join: (dir: string, name: string) => string
+}): Promise<ModelDefInstallResult> {
+  const parsed = parseModelDefinition(input.definition)
+  if (!parsed.ok) return { ok: false, reason: parsed.reason }
+  const key = parsed.source.key
+  if (HARDWARE_MODELS[key] !== undefined) {
+    return {
+      ok: false,
+      key,
+      reason: `型号键 ${key} 与内置型号同名 —— 不能覆盖内置（否则会悄悄改掉所有用户的引脚表）`,
+    }
+  }
+  try {
+    await input.mkdir(input.dir)
+    const file = input.join(input.dir, `${key}.json`)
+    await input.writeFile(file, `${JSON.stringify(input.definition, null, 2)}\n`)
+    const outcome = await input.reload()
+    return { ok: true, key, file, outcome }
+  } catch (error) {
+    return { ok: false, key, reason: `写入失败：${String(error)}` }
+  }
+}
+
 /* ─────────────────────────── 从目录加载 ─────────────────────────── */
 
 /** 读盘用的最小依赖（注入进来 ⇒ 测试能塞假目录，不碰真实文件系统）。 */

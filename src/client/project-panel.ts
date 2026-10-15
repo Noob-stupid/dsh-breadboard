@@ -145,6 +145,13 @@ export interface ProjectPanelProps {
    * ★ 返回人话错误（校验失败要说清是哪个字段 —— 那是写定义的人唯一能拿到的线索）。
    */
   readonly onAddModelDef: (file: File) => Promise<string | undefined>
+  /**
+   * **让 agent 一键写型号定义**：把一句提示词发进当前会话。
+   *
+   * ★ 为什么按钮走"发消息"而不是直接调工具：**写定义是 agent 的活**
+   *   （查手册、对齐字段、按丝印排布），界面只负责把它叫起来、并把纪律说清。
+   */
+  readonly onAskAgent: (text: string) => Promise<string | undefined>
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -183,6 +190,8 @@ export function ProjectPanel(props: ProjectPanelProps) {
    */
   const [bodies, setBodies] = useState<readonly ProjectBodyView[]>([])
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  /** 「让 agent 帮我写」里填的型号名。 */
+  const [defHint, setDefHint] = useState('')
   /** 增删之后要让 `useEffect` 重跑 —— 项目文件在磁盘上变了。 */
   const [nonce, setNonce] = useState(0)
   const [busy, setBusy] = useState<string | undefined>(undefined)
@@ -797,9 +806,9 @@ export function ProjectPanel(props: ProjectPanelProps) {
               cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
             },
             title:
-              '加一个**型号定义**（数据驱动）：选一个 .json，校验通过后装进用户目录并**立即生效**。\n' +
-              '内置型号不可被覆盖（撞名会被拒绝，并说明原因）。\n' +
-              '格式参考插件包里的 model-defs/example-8pin-module.json。',
+              '加一个型号定义（.json）：告诉插件「这块板子有几个脚、每个脚是什么」。\n' +
+              '校验通过才落盘，立即生效；内置型号不可覆盖。\n' +
+              '★ 引脚表要有权威来源（数据手册 / PlatformIO 的 variant 文件）—— 格式见 model-defs/example-8pin-module.json。',
           },
           busy === 'model:def' ? '添加中…' : '＋ 添加型号定义（选 .json）',
           h('input', {
@@ -818,6 +827,69 @@ export function ProjectPanel(props: ProjectPanelProps) {
               })
             },
           }),
+        ),
+        // ── ★★ **让 agent 一键写**（P0.3 的第二条路）──────────────────────
+        //
+        //   ★ 为什么需要它：界面那个入口要用户**自己准备好 JSON**，
+        //     而查手册、对齐字段、按丝印排布这件事 **AI 比人快**。
+        //   ★ 但 agent 必须有**工具**才写得了（`hw_save_model_definition`），
+        //     否则这个按钮只是一句话术：**用户点了，agent 没有手**。
+        //   ★ 提示词里写死了纪律：**要有权威来源，找不到就来问** ——
+        //     不许它凭记忆编一个"看起来合理"的引脚顺序。
+        h(
+          'div',
+          { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
+          h('input', {
+            value: defHint,
+            placeholder: '要加的板子（如 STM32F103C8T6 / ESP32-S3-DevKitC）',
+            onChange: (event: { target?: { value?: string } }) => setDefHint(event.target?.value ?? ''),
+            style: {
+              padding: '3px 5px',
+              borderRadius: '4px',
+              border: '1px solid rgba(120, 140, 170, 0.35)',
+              background: 'rgba(10, 14, 20, 0.9)',
+              color: 'inherit',
+              font: 'inherit',
+              fontSize: '11px',
+              width: '100%',
+            },
+            title: '写上型号名，agent 会去查权威来源再写；不写就让它先问你',
+          }),
+          h(
+            'button',
+            {
+              type: 'button',
+              disabled: props.disabled === true,
+              onClick: () => {
+                const target = defHint.trim() === '' ? '（我问你型号）' : defHint.trim()
+                void props.onAskAgent(
+                  `帮我给「${target}」写一个型号定义（数据驱动）并用 hw_save_model_definition 装上。\n` +
+                    '要求：\n' +
+                    '1. 引脚表**必须有权威来源** —— 优先查本机 PlatformIO 的 variant 文件（pins_arduino.h）、' +
+                    '厂商数据手册，或项目自己的工程文件（platformio.ini / .ioc / sdkconfig）。\n' +
+                    '2. **找不到权威来源就停下来问我**，不要凭记忆编一个看起来合理的引脚顺序 —— ' +
+                    '错的引脚表比没有更坏（会产出"看起来对但接错脚"的校验）。\n' +
+                    '3. 写的时候说明来源是什么；写完告诉我怎么摆进场景。\n' +
+                    '格式参考 model-defs/example-8pin-module.json。',
+                )
+              },
+              style: {
+                padding: '5px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(150, 200, 150, 0.45)',
+                background: 'rgba(28, 40, 32, 0.9)',
+                color: 'inherit',
+                font: 'inherit',
+                fontSize: '11px',
+                cursor: props.disabled === true ? 'not-allowed' : 'pointer',
+              },
+              title:
+                '让 agent 查权威来源后写一条定义并装上。\n' +
+                '它找不到来源时会来问你（不会凭记忆编）。\n' +
+                '★ 内置型号不可覆盖；写入的是用户目录 model-defs/。',
+            },
+            '✎ 让 agent 帮我写',
+          ),
         ),
       ),
   )

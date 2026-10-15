@@ -172,6 +172,59 @@ Two notes worth keeping:
 - **`ok: true` does not mean the effect happened.** Every write should be followed by reading the
   assembly again.
 
+## Model definitions: teaching the plugin a new board
+
+**Appearance and pin data are two different things.** Model libraries (step.parts, GrabCAD,
+SnapEDA…) provide **appearance** — the `.glb`. They do **not** provide pin data: even SnapEDA's
+symbol library explicitly carries "no bus protocol or voltage", and that semantics is exactly what
+the validators check.
+
+```jsonc
+{
+  "key": "stm32f103c8t6",                              // identity; cannot shadow a built-in
+  "label": "STM32F103C8T6 (Blue Pill)",
+  "size": { "x": 0.0533, "y": 0.011, "z": 0.0229 },    // metres
+  "ports": [
+    { "portId": "P1", "name": "VBAT", "protocol": "power", "voltage": 3.3, "direction": "in" }
+  ],
+  "portLayout": { "edge": "+z", "pitch": 0.00254, "count": 40, "inset": 0.001, "rows": 2 }
+}
+```
+
+Install it from the panel (**＋ 添加型号定义**) or have an agent write it
+(`hw_save_model_definition`). Validation happens **before** anything is written, and a valid
+definition takes effect immediately without reloading the plugin.
+
+**`portId` is identity, `name` is the silkscreen.** A board has several GND pins; naming ports after
+their function collides silently. **`voltage: 0` is valid** — that is a ground pin, not a missing
+field.
+
+**The rule that matters:** a pin table must come from an authoritative source — the vendor
+datasheet, PlatformIO's `variants/<board>/pins_arduino.h` (the mapping the compiler actually uses),
+or the project's own files (`platformio.ini`, `.ioc`, `sdkconfig`). **A hand-typed pin table is
+worse than none**, because it yields validation that looks right and connects the wrong pin, and
+nothing can detect it. An agent that cannot find a source is told to stop and ask rather than
+invent a plausible pin order.
+
+## Real-device observation: reading a board into the scene
+
+`hw_watch_device` polls an external system (read-only) and maps a real device onto a scene
+component. It is the mirror image of `hw_network_add`: that one impersonates a device and sends
+requests, this one asks about a real board and sends nothing.
+
+Five states are kept apart, because collapsing them produces plausible but wrong conclusions:
+
+| state | meaning | where to look |
+|---|---|---|
+| `ok` | seen, data fresh | — |
+| `stale` | seen, but the data is old | the board really is offline — check power/network |
+| `error` | we cannot reach the system | the URL and the credentials, **not the hardware** |
+| `not_found` | the system answers but has no such device | the device id, or it has never been online |
+| `idle` | not polled yet | — |
+
+Polling runs on wall-clock time with a two-second floor, which protects the remote server. Only the
+host polls; the panel reads the host's cache.
+
 ## Model bundle format
 
 The folder you hand to *+ Import model bundle* (and the layout the exporter round-trips through) is:

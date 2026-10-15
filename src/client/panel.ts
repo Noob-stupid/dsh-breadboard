@@ -477,6 +477,17 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
         // ★ "只补缺"开关：默认关（换装/覆盖）；打开则不碰已有几何的型号
         onlyMissingImport,
         onToggleOnlyMissingImport: setOnlyMissingImport,
+        // ★★ **让 agent 一键写型号定义** —— 把提示词发进当前会话。
+        //   ★ 走的是**官方聊天通道**（`sendToCurrentSession`：客户端准入为主路、
+        //     宿主路由为显式降级），与用户自己敲一句是**同一条路** ——
+        //     不另开旁路，附件/队列/错误镜像才不会失效。
+        //   ★ 纪律写在提示词里：**要有权威来源，找不到就来问** ——
+        //     不许它凭记忆编一个"看起来合理"的引脚顺序。
+        onAskAgent: async (text) => {
+          const outcome = await sendToCurrentSession(props.sessions, text)
+          if (outcome.ok) return undefined
+          return outcome.reason ?? '发送失败'
+        },
         /**
          * ★★ **加一个型号定义**（选一个 .json）—— 把"加板子"变成界面动作。
          *

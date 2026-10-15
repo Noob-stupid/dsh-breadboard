@@ -17,6 +17,7 @@
  */
 import z from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync } from 'node:fs'
+import { mkdir as mkdirFs, writeFile as writeFileFs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,6 +38,7 @@ import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
 import { createObserveTools } from './host/observe-tools.ts'
+import { createModelDefTools } from './host/model-def-tools.ts'
 import { RealDeviceObserver } from './core/sim/observer.ts'
 import { zhizuoObserveConfig } from './core/sim/zhizuo-observe.ts'
 import type { ObserveView } from './contracts/protocol.ts'
@@ -901,6 +903,24 @@ export function apply(ctx: AppContext, config: Config): void {
           registeredToolNames.push(definition.name)
         }
         log('已注册真机观察工具（hw_watch_device）')
+
+        // ★★ **型号定义工具** —— 让 agent 能"一键写并装上"一块新硬件的引脚表。
+        //   ★ 与界面那个「添加型号定义」**共用同一段实现**（`installModelDefinition`）：
+        //     校验 → 撞内置检查 → 落盘 → 立即重载。两处各写一份迟早漂移。
+        //   ★ 没有它，界面上的"让 AI 帮我写"就只是话术 —— **用户点了，agent 没有手**。
+        for (const definition of createModelDefTools({
+          dir: modelDefsUserDir,
+          reload: reloadModelDefs,
+          writeFile: (file, text) => writeFileFs(file, text, 'utf8'),
+          mkdir: async (dir) => {
+            await mkdirFs(dir, { recursive: true })
+          },
+          join: (dir, name) => path.join(dir, name),
+        })) {
+          networkDisposers.push(toolRegistry.register(definition))
+          registeredToolNames.push(definition.name)
+        }
+        log('已注册型号定义工具（hw_save_model_definition）')
       } catch (error) {
         warn(`联网设备工具注册失败（已回滚）：${String(error)}`)
         registeredToolNames.length = 0
