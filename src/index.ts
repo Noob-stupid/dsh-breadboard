@@ -36,6 +36,8 @@ import { createRouteBundle, scanProjectNeeds, type HttpRoute, type UpgradeRoute 
 import { createHardwareTools, type ToolRegistryLike } from './host/tools.ts'
 import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
+import { createObserveTools } from './host/observe-tools.ts'
+import { RealDeviceObserver } from './core/sim/observer.ts'
 import type { ProjectStatus } from './contracts/projects.ts'
 import { createFetchTransport } from './host/fetch-transport.ts'
 import { createChatSender, type AgentsLike } from './host/chat.ts'
@@ -755,6 +757,40 @@ export function apply(ctx: AppContext, config: Config): void {
       transport: createFetchTransport({ timeoutMs: 10_000 }),
     })
 
+    // ★★ **真机观察器**（P1）—— 只读轮询真机状态，挂到场景器件上。
+    //
+    //  ★ 用**墙钟**定时器：真机按真实时间走，**不能**跟虚拟时钟加速
+    //    （加速会把对方服务器打爆 —— 与联网设备同一个坑，见 docs/07）。
+    //  ★ 用 `fetchJson` 注入而不是直接 fetch：观察器要能**确定性测试**
+    //    （测试里驱动"第 N 次轮询失败"，而不是真等 2 秒）。
+    const observer = new RealDeviceObserver(
+      {
+        fetchJson: async (url, headers) => {
+          const response = await fetch(url, {
+            headers: headers === undefined ? undefined : { ...headers },
+          })
+          if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
+          return await response.json()
+        },
+        setTimer: (fn, ms) => {
+          const handle = setInterval(fn, ms)
+          // ★ 别让这个定时器拖住进程退出
+          if (typeof handle === 'object' && handle !== null && 'unref' in handle) {
+            ;(handle as { unref: () => void }).unref()
+          }
+          return () => clearInterval(handle)
+        },
+        now: () => Date.now(),
+      },
+      log,
+    )
+    ctx.effect?.(
+      () => () => {
+        observer.dispose()
+      },
+      'dsh-breadboard: real-device-observer',
+    )
+
     const toolRegistry = ctx.get?.('tools') as ToolRegistryLike | undefined
     if (toolRegistry === undefined) {
       warn('宿主未提供 tools 服务 —— 联网设备工具不会注册')
@@ -780,6 +816,16 @@ export function apply(ctx: AppContext, config: Config): void {
           registeredToolNames.push(definition.name)
         }
         log('已注册项目导入工具（hw_list_projects / hw_import_project）')
+
+        // ★★ **真机观察**（P1：真机在环的第一步）—— 只读轮询真机状态。
+        //   ★ 用**墙钟**定时器（真机按真实时间走，不能跟虚拟时钟加速）；
+        //     与联网设备同一个坑，见 docs/07。
+        //   ★ 放进同一个 try：它与联网工具共用注册表，失败要一起回滚。
+        for (const definition of createObserveTools({ observer, state })) {
+          networkDisposers.push(toolRegistry.register(definition))
+          registeredToolNames.push(definition.name)
+        }
+        log('已注册真机观察工具（hw_watch_device）')
       } catch (error) {
         warn(`联网设备工具注册失败（已回滚）：${String(error)}`)
         registeredToolNames.length = 0
