@@ -91,10 +91,34 @@ export function Panel(props: {
   )
 }
 
+/**
+ * **型号表的一项**（宿主 `GET /api/models` 给）。
+ *
+ * ★ 为什么前端要有这个类型而不是直接用 `HardwareModel`：
+ *   表里既有内置型号，也有**运行时加载的外部型号** —— 后者在前端**没有编译期类型**，
+ *   它的尺寸/针数**只能由宿主告诉前端**。
+ */
+export interface ModelTableEntry {
+  readonly key: string
+  readonly label: string
+  /** 是运行时加载的**数据驱动**型号（不是我们内置的）。 */
+  readonly external: boolean
+  /** 针数（0 = 无源件，如面包板）。 */
+  readonly ports: number
+  /** 尺寸（米）。 */
+  readonly size: { readonly x: number; readonly y: number; readonly z: number }
+}
 export interface HardwarePaletteProps {
   readonly onPick: (modelKey: string) => void
   /** 宿主不可用时禁用（如 WS 未连上）。 */
   readonly disabled?: boolean
+  /**
+   * **可用型号表**（宿主给，含运行时加载的外部数据驱动型号）。
+   *
+   * ★ 与下面的 `available` 分工：这里是"**有哪些型号**"，`available` 是"**哪些有几何**"。
+   *   两个都必须来自宿主 —— 编译期的表看不见外部型号。
+   */
+  readonly models: readonly ModelTableEntry[]
   /**
    * **已经有真几何的型号键**（来自 `/api/model`）。
    *
@@ -117,7 +141,9 @@ function mm(value: number): string {
 }
 
 export function HardwarePalette(props: HardwarePaletteProps) {
-  const models = Object.values(HARDWARE_MODELS).filter((model) => props.available.includes(model.key))
+  // ★ 用**宿主给的**型号表（含运行时加载的外部型号）——
+  //   否则外部型号即使导了几何，也进不了这个列表（编译期表里没有它）。
+  const models = props.models.filter((model) => props.available.includes(model.key))
 
   return createElement(
     Panel,
@@ -156,7 +182,7 @@ export function HardwarePalette(props: HardwarePaletteProps) {
             title:
               `${model.label}\n` +
               `尺寸 ${mm(model.size.x)} × ${mm(model.size.z)} × ${mm(model.size.y)} mm\n` +
-              `${model.ports.length} 个端口`,
+              `${model.ports} 个端口`,
             style: {
               textAlign: 'left',
               padding: '6px 8px',
@@ -205,6 +231,17 @@ const BUTTON_STYLE = {
 
 export interface ImportControlsProps {
   readonly records: readonly ImportedModelRecord[]
+  /**
+   * **可用型号表** —— 由**宿主**给出（`GET /api/models`）。
+   *
+   * ★★ 为什么不在这里 `import { HARDWARE_MODELS }`：内置型号可以那样拿，
+   *   但**外部（数据驱动）型号是运行时才注册进宿主的** ⇒ 前端编译期根本不知道它们存在
+   *   ⇒ 会出现"我加了定义文件、agent 能用、界面里却没有"这种**半通**状态。
+   *   型号表**只能由宿主给**（它才知道运行时到底装了哪些）。
+   *
+   * ★ `external` 让界面说清来源：内置的，还是你（或别人）加的数据驱动型号。
+   */
+  readonly models: readonly ModelTableEntry[]
   readonly onImport: (modelKey: string, file: File) => void
   /** 一键导入候选：宿主按 `partId` 自己去取 GLB（客户端不给 URL）。 */
   readonly onImportCandidate: (modelKey: string, partId: string) => Promise<void>
@@ -228,7 +265,7 @@ export function ImportControls(props: ImportControlsProps) {
   const [searching, setSearching] = useState(false)
   const [result, setResult] = useState<ModelSearchResult | null>(null)
   /** 候选「一键导入」的目标型号键（默认 = 发起搜索的那一行）。 */
-  const [targetKey, setTargetKey] = useState<string>(Object.keys(HARDWARE_MODELS)[0] ?? '')
+  const [targetKey, setTargetKey] = useState<string>(props.models[0]?.key ?? '')
   /** 正在导入的候选 id（按钮显示进行中）。 */
   const [importingId, setImportingId] = useState<string | null>(null)
 
@@ -331,6 +368,8 @@ export function ImportControls(props: ImportControlsProps) {
           onTargetKeyChange: setTargetKey,
           onImportCandidate: (candidate: ModelCandidate) => void importCandidate(candidate),
           importingId,
+          // ★ 目标型号下拉也要用宿主型号表（否则搜到外部型号却选不了它）
+          models: props.models,
         })
       : null,
     // 外部站点直链：**兜底**路径（搜索不可用、或用户想自己去逛时用）
@@ -368,7 +407,8 @@ export function ImportControls(props: ImportControlsProps) {
     createElement(
       'div',
       { style: RECORDS_LIST_STYLE },
-      ...Object.values(HARDWARE_MODELS).map((model) => {
+      // ★ 用**宿主给的**型号表（含运行时加载的外部型号），不用编译期的 HARDWARE_MODELS
+      ...props.models.map((model) => {
       const imported = props.records.find((record) => record.modelKey === model.key)
       return createElement(
         'div',
@@ -382,7 +422,7 @@ export function ImportControls(props: ImportControlsProps) {
                 (imported.nodes === undefined ? '' : ` · ${imported.nodes} 个节点`)
               : '当前使用占位盒',
           },
-          `${model.key}${imported ? ' ●' : ''}`,
+          `${model.key}${imported ? ' ●' : ''}${model.external ? ' ［数据驱动］' : ''}`,
         ),
         // ★ 把**节点数**摆到明面上。
         //   为什么值得占一个位置：它是"每帧 / 每次输入遍历全树"这类写法的**放大倍数**，
@@ -489,6 +529,8 @@ export interface SearchResultsProps {
   readonly onTargetKeyChange: (modelKey: string) => void
   readonly onImportCandidate: (candidate: ModelCandidate) => void
   readonly importingId: string | null
+  /** **可用型号表**（宿主给，含数据驱动型号）—— 目标型号下拉用它。 */
+  readonly models: readonly ModelTableEntry[]
 }
 
 export function SearchResults(props: SearchResultsProps) {
@@ -555,8 +597,12 @@ export function SearchResults(props: SearchResultsProps) {
                   font: 'inherit',
                 },
               },
-              ...Object.values(HARDWARE_MODELS).map((model) =>
-                createElement('option', { key: model.key, value: model.key }, model.label),
+              ...props.models.map((model) =>
+                createElement(
+                  'option',
+                  { key: model.key, value: model.key },
+                  model.external ? `${model.label}（数据驱动）` : model.label,
+                ),
               ),
             ),
           ),

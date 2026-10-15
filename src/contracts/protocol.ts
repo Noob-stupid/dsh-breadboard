@@ -48,6 +48,23 @@ export const HTTP_ROUTES = {
    *   ★ 与 `hw_list_projects` 工具**共用同一个函数**，两边不会说不一致的话。
    */
   projects: `${ROUTE_PREFIX}/api/projects`,
+  /**
+   * GET → **可用型号表**（内置 + 数据驱动加载的外部型号）。
+   *
+   * ★★ 存在的理由（这是"加一块板子 = 只加数据"能不能**在界面上看到**的关键）：
+   *   内置型号是**编译期** `import { HARDWARE_MODELS }` 到前端的，而外部型号是
+   *   **运行时**才注册进宿主的 ⇒ 前端**根本不知道它们存在**，
+   *   于是"我加了定义文件、工具能用、界面里没有"。
+   *   ⇒ 型号表必须由**宿主**给出（它才知道运行时到底装了哪些）。
+   *
+   * ★ 每项带 `external` 标记：界面上要能看出"这是我们内置的"还是"你/别人加的"。
+   *
+   * ⚠️⚠️ **路径不能叫 `/api/models`** —— 模型存储路由 `/api/model`
+   *   是**同时按 exact 和 prefix 注册**的，`/api/models` 会 `startsWith('/api/model')`
+   *   ⇒ **被前缀处理器吃掉，永远到不了这条**（既有测试当场抓到）。
+   *   ⇒ 用 `/api/catalog`（型号目录），与存储路由的前缀彻底错开。
+   */
+  modelCatalog: `${ROUTE_PREFIX}/api/catalog`,
 } as const
 
 /** WebSocket 升级路由（`ctx.webServer.registerUpgrade`）。前端订阅事件流。 */

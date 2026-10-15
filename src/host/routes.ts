@@ -18,7 +18,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 
 import type { ProjectStatus } from '../contracts/projects.ts'
 import type { ProjectBody, ProjectScanOutcome } from '../core/projects/store.ts'
-import { HARDWARE_MODELS } from '../contracts/library.ts'
+import { HARDWARE_MODELS, findModel, isExternalModel, modelKeys } from '../contracts/library.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import type { HardwareEventBus } from '../core/events.ts'
 import type { ModelStore } from '../core/models/store.ts'
@@ -362,6 +362,31 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
       path: HTTP_ROUTES.capabilities,
       handler: (_req, res) => {
         sendJson(res, 200, deps.capabilities())
+      },
+    },
+    // ── **可用型号表**（内置 + 运行时加载的外部型号）───────────────────────
+    //
+    //  ★★ 为什么必须由宿主给：前端对内置型号是**编译期** import，
+    //     而外部型号（`model-defs/*.json`）是**运行时**注册的 ⇒
+    //     前端不知道它们存在 ⇒ 会出现"工具能用、界面里没有"这种半通状态。
+    //  ★ `external` 标记让界面能说清"这是内置的 / 这是你（或别人）加的"。
+    {
+      kind: 'exact',
+      path: HTTP_ROUTES.modelCatalog,
+      handler: (_req, res) => {
+        const list = modelKeys().map((key) => {
+          const model = findModel(key)
+          return {
+            key,
+            label: model?.label ?? key,
+            external: isExternalModel(key),
+            ports: model?.ports.length ?? 0,
+            // ★ 尺寸也要给：① 器件列表上要显示"这块板子多大"，
+            //   而**外部型号的尺寸只在宿主手里**（前端编译期表里没有它）。
+            size: model?.size ?? { x: 0, y: 0, z: 0 },
+          }
+        })
+        sendJson(res, 200, { models: list })
       },
     },
     {

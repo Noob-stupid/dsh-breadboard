@@ -147,6 +147,10 @@ test('★ 提供 webServer 时注册 HTTP 与 WS 路由', () => {
       MODEL_ROUTES.base,
       MODEL_ROUTES.search,
       MODEL_ROUTES.import,
+      // ★ 型号表（含运行时加载的外部/数据驱动型号）。
+      //   ⚠️ 路径**故意不叫** `/api/models`：存储路由的前缀是 `/api/model`，
+      //      那样会被前缀处理器吃掉（既有断言当场抓到），所以用 `/api/catalog`。
+      HTTP_ROUTES.modelCatalog,
     ].sort(),
   )
   assert.deepEqual(upgraded, [WS_ROUTE])

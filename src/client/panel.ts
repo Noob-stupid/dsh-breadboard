@@ -33,6 +33,7 @@ import {
   ImportControls,
   NoticeBar,
   type ContextMenuItem,
+  type ModelTableEntry,
 } from './hud.ts'
 import { ProjectPanel, type ProjectScanReport } from './project-panel.ts'
 import { sendToCurrentSession } from './session-chat.ts'
@@ -68,6 +69,16 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
   const [ready, setReady] = useState(false)
   const [records, setRecords] = useState<readonly ImportedModelRecord[]>([])
   /**
+   * **可用型号表** —— 从**宿主**拉（`GET /api/models`），不是编译期 import。
+   *
+   * ★★ 为什么要这样：内置型号编译期就有，但**外部（数据驱动）型号是运行时
+   *   才注册进宿主的** ⇒ 前端不知道它们存在 ⇒ 会出现"定义文件加了、agent 能用、
+   *   界面里却没有"的半通状态。型号表只能由宿主给。
+   *
+   * ★ 初值取空数组：拉回来之前列表是空的（**短暂空白好过显示一份错的表**）。
+   */
+  const [models, setModels] = useState<readonly ModelTableEntry[]>([])
+  /**
    * **项目本体扫描报告** —— 用户工作流第②步的产物。
    *
    * ★ 扫了不显示等于没扫；而且"缺哪些型号"必须**点名** ——
@@ -98,6 +109,29 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
       () => setNotice(null),
       next.severity === 'info' ? 2500 : 7000,
     )
+  }, [])
+
+  // ── 型号表：从宿主拉一次（含运行时加载的外部数据驱动型号）────────────────
+  //
+  //  ★ 为什么"拉一次"就够：型号定义在**宿主启动时**装载（`model-defs/*.json`），
+  //    运行中不会变；真要重载，用户会重载插件 —— 那时组件本来就重挂了。
+  //  ★ 失败**不静默**：拉不到时把原因说出来（否则界面只是"少了几行"，无从判断）。
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      try {
+        const response = await fetch(HTTP_ROUTES.modelCatalog)
+        if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
+        const payload = (await response.json()) as { models?: ModelTableEntry[] }
+        if (!alive) return
+        setModels(payload.models ?? [])
+      } catch (error) {
+        if (alive) pushNotice({ text: `型号表拉取失败：${String(error)}`, severity: 'error' })
+      }
+    })()
+    return () => {
+      alive = false
+    }
   }, [])
 
   useEffect(() => {
@@ -604,11 +638,15 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
       createElement(HardwarePalette, {
         onPick: handlePick,
         disabled: !ready,
+        // ★ 型号表来自宿主（含外部数据驱动型号）
+        models,
         // ★ 只列**有真几何**的型号（用户选的 A）—— 见 HardwarePaletteProps.available 的说明
         available: records.filter((record) => record.modelKey !== undefined).map((record) => record.modelKey),
       }),
       createElement(ImportControls, {
         records,
+        // ★ 换装列表也用宿主型号表（外部型号才会出现在这里）
+        models,
         onImport: (modelKey, file) => void handleImport(modelKey, file),
         onImportCandidate: handleImportCandidate,
         onRemove: (modelKey) => void handleRemove(modelKey),
