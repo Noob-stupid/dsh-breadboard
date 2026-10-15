@@ -422,14 +422,17 @@ export function apply(ctx: AppContext, config: Config): void {
   //
   //  ⚠️ 失败必须可见：坏文件、JSON 语法错、与内置撞名的，全部打日志说清是哪个文件、为什么。
   //     否则用户会陷入"我明明加了却没生效"——那正是最难查的一类。
-  void (async () => {
-    const { fileURLToPath } = await import('node:url')
+  //
+  //  ★ 抽成**一个函数**而不是内联 IIFE：界面"加型号"落盘后要**立即重载**，
+  //    重载必须与启动加载**走同一套目录与同一套 io** ——
+  //    两处各写一份，迟早一处改了另一处没改（症状是"重启后才生效"）。
+  const modelDefsPackagedDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'model-defs')
+  const modelDefsUserDir = path.join(dshHome, 'dsh-hardware-sandbox', 'model-defs')
+  const reloadModelDefs = async () => {
     const { readdir, readFile } = await import('node:fs/promises')
     const { loadModelDefs } = await import('./core/models/definitions.ts')
-    const packagedDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'model-defs')
-    const userDir = path.join(dshHome, 'dsh-hardware-sandbox', 'model-defs')
-    const result = await loadModelDefs(
-      [packagedDir, userDir],
+    return loadModelDefs(
+      [modelDefsPackagedDir, modelDefsUserDir],
       {
         listJson: async (dir) =>
           (await readdir(dir)).filter((name) => name.endsWith('.json')).map((name) => path.join(dir, name)),
@@ -437,6 +440,9 @@ export function apply(ctx: AppContext, config: Config): void {
       },
       log,
     )
+  }
+  void (async () => {
+    const result = await reloadModelDefs()
     if (result.registered.length === 0 && result.failures.length === 0 && result.rejected.length === 0) {
       log('外部型号定义：没有（用户目录 model-defs/ 可以放自己的 *.json）')
     }
@@ -543,6 +549,10 @@ export function apply(ctx: AppContext, config: Config): void {
       capabilities,
       models,
       stepParts,
+      // ★ **型号定义目录**（界面"加型号"的落点）+ 立即重载口。
+      //   两者一起给，是因为"校验 → 写盘 → 重载"是一条链：
+      //   只给目录不给重载，就会出现"写进去了但没生效"（用户以为加上了）。
+      modelDefs: { dir: modelDefsUserDir, reload: reloadModelDefs },
       ...(searcher !== undefined ? { search: searcher } : {}),
       ...(chatSender !== undefined ? { chat: chatSender } : {}),
       // ★ 项目状态给界面用（"智座连通了没有"）。与 hw_list_projects **同一个函数**。

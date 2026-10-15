@@ -19,6 +19,8 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import type { ProjectStatus } from '../contracts/projects.ts'
 import type { ProjectBody, ProjectScanOutcome } from '../core/projects/store.ts'
 import { HARDWARE_MODELS, findModel, isExternalModel, modelKeys } from '../contracts/library.ts'
+import path from 'node:path'
+import { parseModelDefinition, type ModelDefLoadResult } from '../core/models/definitions.ts'
 import type { AssemblyState } from '../core/state/assembly-state.ts'
 import type { HardwareEventBus } from '../core/events.ts'
 import type { ModelStore } from '../core/models/store.ts'
@@ -76,6 +78,17 @@ export interface RouteDeps {
   readonly bus: HardwareEventBus
   /** 能力探测结果（§10.1）。用函数以便随环境变化。 */
   readonly capabilities: () => HostCapabilities
+  /**
+   * **型号定义目录**（数据驱动型号的落点）。省略则"加型号"的 POST 返回 501。
+   *
+   * ★ `reload` 是必需的：落盘后要**立即重载**才生效（读的是目录，不必重载插件）。
+   * ★ 只给"目录 + 重载口"，**不把写盘逻辑塞进路由** —— 校验 → 写盘 → 重载是一条链，
+   *   拆开就会出现"写了一半没重载"这种**半生效**状态（用户以为加上了，其实没有）。
+   */
+  readonly modelDefs?: {
+    readonly dir: string
+    readonly reload: () => Promise<ModelDefLoadResult>
+  }
   /** 用户导入模型的存储。省略则模型路由不注册。 */
   readonly models?: ModelStore
   /** 搜索能力。省略则搜索路由不注册（界面应降级为"只给外链"）。 */
@@ -373,7 +386,7 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
     {
       kind: 'exact',
       path: HTTP_ROUTES.modelCatalog,
-      handler: (_req, res) => {
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
         const list = modelKeys().map((key) => {
           const model = findModel(key)
           return {
@@ -386,7 +399,63 @@ export function createHttpRoutes(deps: RouteDeps): HttpRoute[] {
             size: model?.size ?? { x: 0, y: 0, z: 0 },
           }
         })
-        sendJson(res, 200, { models: list })
+        if (req.method === 'GET') {
+          sendJson(res, 200, { models: list })
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, reason: 'method_not_allowed' })
+          return
+        }
+        // ── **加一个型号定义**（把"加板子"变成界面动作）────────────────────
+        //
+        //  ★★ 顺序是刻意的：**先校验、再落盘**。
+        //     反过来（先写文件再校验）会把坏定义留在用户目录里 ——
+        //     下次启动照样加载、照样失败，而用户以为"我加过了"。
+        //  ★ 落盘后**立即重载**（不必重载插件）：重载读的是目录，
+        //     所以新定义当场可用，界面刷新即可看到。
+        const face = deps.modelDefs
+        if (face === undefined) {
+          sendJson(res, 501, { ok: false, reason: '这个宿主没有开放型号定义目录（不能写入）' })
+          return
+        }
+        const body = asRecord(await readJsonBody(req))
+        const op = typeof body.op === 'string' ? body.op : ''
+        if (op !== 'add-def') {
+          sendJson(res, 400, { ok: false, reason: `未知操作：${op}` })
+          return
+        }
+        const parsed = parseModelDefinition(body.definition)
+        if (!parsed.ok) {
+          sendJson(res, 400, { ok: false, reason: parsed.reason })
+          return
+        }
+        const key = parsed.source.key
+        // ★ 内置不可被覆盖（与 `buildRegistry` 同一条纪律；这里提前拦，**不写盘**）
+        if (HARDWARE_MODELS[key] !== undefined) {
+          sendJson(res, 409, {
+            ok: false,
+            reason: `型号键 ${key} 与内置型号同名 —— 不能覆盖内置（否则会悄悄改掉所有用户的引脚表）`,
+          })
+          return
+        }
+        try {
+          const { mkdir, writeFile } = await import('node:fs/promises')
+          await mkdir(face.dir, { recursive: true })
+          const target = path.join(face.dir, `${key}.json`)
+          await writeFile(target, `${JSON.stringify(body.definition, null, 2)}\n`, 'utf8')
+          const outcome = await face.reload()
+          sendJson(res, 200, {
+            ok: true,
+            key,
+            file: target,
+            registered: outcome.registered,
+            rejected: outcome.rejected,
+            failures: outcome.failures,
+          })
+        } catch (error) {
+          sendJson(res, 500, { ok: false, reason: `写入失败：${String(error)}` })
+        }
       },
     },
     {

@@ -441,6 +441,41 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
         // ★ "只补缺"开关：默认关（换装/覆盖）；打开则不碰已有几何的型号
         onlyMissingImport,
         onToggleOnlyMissingImport: setOnlyMissingImport,
+        /**
+         * ★★ **加一个型号定义**（选一个 .json）—— 把"加板子"变成界面动作。
+         *
+         * ★ 顺序：**先让宿主校验，再落盘**（宿主侧就是这么实现的）。
+         *   ⇒ 校验失败时目录里**没有**这个文件，用户不会陷入
+         *     "我加过了、怎么没生效"（那是坏定义留在目录里的典型症状）。
+         * ★ 成功后**重新拉一次型号表** —— 宿主是立即重载的，
+         *   所以这一步之后 ①② 的列表里就能看到新型号了。
+         */
+        onAddModelDef: async (file) => {
+          let raw: unknown
+          try {
+            raw = JSON.parse(await file.text())
+          } catch (error) {
+            return `${file.name} 不是合法 JSON：${String(error)}`
+          }
+          try {
+            const response = await fetch(HTTP_ROUTES.modelCatalog, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ op: 'add-def', definition: raw }),
+            })
+            const body = (await response.json()) as { ok?: boolean; key?: string; reason?: string }
+            if (body.ok !== true) return body.reason ?? `HTTP ${String(response.status)}`
+            const refreshed = await fetch(HTTP_ROUTES.modelCatalog)
+            if (refreshed.ok) {
+              const payload = (await refreshed.json()) as { models?: ModelTableEntry[] }
+              setModels(payload.models ?? [])
+            }
+            pushNotice({ text: `已添加型号定义：${body.key ?? ''}`, severity: 'info' })
+            return undefined
+          } catch (error) {
+            return String(error)
+          }
+        },
         // ★ **导入项目本体** —— 一个完整的前后端项目文件夹（如 D:\MAX_xiangmu）
         //   收整个文件夹的清单，交给宿主**扫描出它需要哪些硬件**。
         onImportProjectFolder: async (files) => {

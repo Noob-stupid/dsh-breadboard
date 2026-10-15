@@ -135,6 +135,16 @@ export interface ProjectPanelProps {
    *   所以这个动作打包的是**当前模型库里的全部几何**，不是某一个型号。
    */
   readonly onExportModelSet: () => Promise<string | undefined>
+  /**
+   * **加一个型号定义**（选一个 `.json`）—— 把"加板子"变成界面动作。
+   *
+   * ★ 为什么要有它：数据驱动型号虽然只加一条数据，但**要用户自己找到
+   *   `model-defs/` 目录再把文件放进去** —— 对多数人来说这条路根本不存在。
+   *   有了这个入口，第三方加板子才真的只是"选个文件"。
+   *
+   * ★ 返回人话错误（校验失败要说清是哪个字段 —— 那是写定义的人唯一能拿到的线索）。
+   */
+  readonly onAddModelDef: (file: File) => Promise<string | undefined>
 }
 
 /** 调 `POST /api/projects` 的两种操作。返回**人话错误**（失败要说清，不能静默）。 */
@@ -761,6 +771,49 @@ export function ProjectPanel(props: ProjectPanelProps) {
               void props.onImportModelSet(files).then((error) => {
                 setBusy(undefined)
                 if (error !== undefined) setFailure(`建模组导入失败：${error}`)
+                else setNonce((n) => n + 1)
+              })
+            },
+          }),
+        ),
+        // ── ★ **加一个型号定义**（选一个 .json）──────────────────────────────
+        //
+        //   ★ 这是"加一块板子 = 只加数据"真正落到**用户手上**的一步：
+        //     没有它，用户得自己找到 `model-defs/` 目录再把文件拷进去 ——
+        //     对多数人来说这条路根本不存在，机制再漂亮也用不上。
+        //   ★ 宿主侧顺序是**先校验再落盘**：坏定义不会被写进目录，
+        //     所以这里失败时只需把原因显示出来（带字段路径），文件没落地。
+        h(
+          'label',
+          {
+            style: {
+              display: 'block',
+              textAlign: 'center',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              border: '1px dashed rgba(150, 200, 150, 0.45)',
+              background: 'rgba(28, 40, 32, 0.9)',
+              fontSize: '11px',
+              cursor: props.disabled || busy !== undefined ? 'not-allowed' : 'pointer',
+            },
+            title:
+              '加一个**型号定义**（数据驱动）：选一个 .json，校验通过后装进用户目录并**立即生效**。\n' +
+              '内置型号不可被覆盖（撞名会被拒绝，并说明原因）。\n' +
+              '格式参考插件包里的 model-defs/example-8pin-module.json。',
+          },
+          busy === 'model:def' ? '添加中…' : '＋ 添加型号定义（选 .json）',
+          h('input', {
+            type: 'file',
+            accept: '.json,application/json',
+            disabled: props.disabled || busy !== undefined,
+            style: { display: 'none' },
+            onChange: (event: { target?: { files?: FileList | null } }) => {
+              const file = event.target?.files?.[0]
+              if (file === undefined) return
+              setBusy('model:def')
+              void props.onAddModelDef(file).then((error) => {
+                setBusy(undefined)
+                if (error !== undefined) setFailure(`型号定义未添加：${error}`)
                 else setNonce((n) => n + 1)
               })
             },
