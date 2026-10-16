@@ -90,7 +90,7 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 或者干脆跳过 1–3：把系统用话讲给 agent，让它用 **`hw_save_project`** 写成图纸，
 再用 **`hw_import_project`** 一次把器件、连线、联网绑定全部摆好。
 
-## Agent 工具：15 个 `hw_*`
+## Agent 工具：16 个 `hw_*`
 
 以下是**实际注册的清单**（未增未删）。「什么时候用」这一列才是表格的意义 —— 这些工具并不通用互换。
 
@@ -131,6 +131,7 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 
 | 工具 | 作用 | 什么时候用 |
 |---|---|---|
+| `hw_scan_board_pins` | **从本机 PlatformIO 的权威文件推导引脚表草稿**：`boards/<board>.json` → `build.variant` → `variants/<variant>/pins_arduino.h`（**编译器实际用的那份映射**）。`list:true` 列出本机能找到的板子 | **要加一块新板子时先跑它**。★★ 它给的是**草稿 + 缺口清单**（缺：物理排布 / 电气语义 / 丝印），**不是成品** —— 缺口按数据手册补齐后再用 `hw_save_model_definition` |
 | `hw_save_model_definition` | 保存一条**型号定义**（引脚表：`portId`/丝印/协议/电压/方向 + 尺寸 + 排布）。校验通过才落盘，**落盘后立即生效** | 需要一块**插件还不认识**的板子时。**引脚表必须有权威来源**（厂商数据手册 / PlatformIO 的 variant 文件 / 项目自己的工程文件）；找不到就**问用户**，不要凭记忆编 |
 
 ### 真机在环（只读观察）

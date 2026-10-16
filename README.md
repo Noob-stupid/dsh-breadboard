@@ -103,7 +103,7 @@ Or skip steps 1–3 entirely: describe the system to the agent and let it call *
 to write a blueprint, then **`hw_import_project`** to place every part, wire and network binding in
 one go.
 
-## Agent tools: 13 `hw_*` tools
+## Agent tools: 16 `hw_*` tools
 
 This is the actual registered list (nothing added, nothing omitted). The **when to use** column is
 the point of the table: these tools are not interchangeable.
@@ -194,6 +194,14 @@ the validators check.
 Install it from the panel (**＋ 添加型号定义**) or have an agent write it
 (`hw_save_model_definition`). Validation happens **before** anything is written, and a valid
 definition takes effect immediately without reloading the plugin.
+
+**Start from an authoritative source, not from a pinout image.** `hw_scan_board_pins` reads the
+chain PlatformIO itself uses — `boards/<board>.json` → `build.variant` →
+`variants/<variant>/pins_arduino.h`, the file the compiler translates `SDA` into GPIO21 with — and
+returns a draft with its provenance. It returns a draft rather than a finished definition on
+purpose, because that file cannot tell you which pin sits where on the header, which pin is 5V or
+needs a pull-up, or what is printed on the board. Those gaps come back with every draft, and an
+agent that cannot source them is told to ask rather than invent them.
 
 **`portId` is identity, `name` is the silkscreen.** A board has several GND pins; naming ports after
 their function collides silently. **`voltage: 0` is valid** — that is a ground pin, not a missing

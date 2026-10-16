@@ -174,14 +174,34 @@ hw_edit_assembly({kind:'import_project'})    切换项目 = 换整套硬件（�
 **引脚数据（几个脚、哪个脚是什么）库里没有** —— 连 SnapEDA 的符号库都"不含总线协议与电压"，
 而语义正是要校验的东西。
 
+### ① 先扫权威来源（**别手抄 pinout 图**）
+
+```
+hw_scan_board_pins({ list: true })                 // 本机能找到哪些板子（本机实测 242 块）
+hw_scan_board_pins({ board: 'esp32dev' })          // 取某一块的引脚草稿
+```
+
+权威链：`platforms/<platform>/boards/<board>.json` → `build.variant`
+→ `packages/framework-arduino*/variants/<variant>/pins_arduino.h`
+—— **那份文件就是编译器用来把 `SDA` 翻译成 GPIO21 的东西**。
+
+**★★ 它给的是「草稿 + 缺口清单」，不是成品**（缺口**每次**都会给，不是免责声明）：
+
+| 它给得出 | 它给不出（必须补） |
+|---|---|
+| 引脚名 ↔ GPIO 号（`SDA = 21`）| **物理排布**（哪个脚在排针哪里）⇒ `portLayout` |
+| MCU / 板子名字 / variant | **电气语义**（5V？上拉？I2C？）⇒ `voltage`/`direction` |
+| **出处**（文件路径）| **丝印**（`SDA`/`TX` 是功能名，不等于板上印的字）|
+
+### ② 补齐后装上
+
 ```
 hw_save_model_definition({ definition: { key, label, size, ports:[…], portLayout? } })
   → 校验通过才落盘，**落盘后立即生效**（不必重载插件）
 ```
 
 **★★ 一条纪律（工具描述里也写了）**：**引脚表必须有权威来源** ——
-厂商数据手册 / PlatformIO 的 `variants/<board>/pins_arduino.h`（**编译器实际用的那份映射**）/
-项目自己的工程文件（`platformio.ini`、`.ioc`、`sdkconfig`）。
+厂商数据手册 / PlatformIO 的 variant 文件 / 项目自己的工程文件（`platformio.ini`、`.ioc`、`sdkconfig`）。
 **手打错的引脚表比没有更坏**：它会产出"看起来对但接错脚"的校验，而**没人能发现**。
 ⇒ **找不到权威来源就停下来问用户**，不要凭记忆编一个看起来合理的引脚顺序。
 
