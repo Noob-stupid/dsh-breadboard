@@ -158,6 +158,9 @@ export function HardwareSandboxPanel(props: HardwareSandboxPanelProps) {
         if (!response.ok) return
         const payload = (await response.json()) as { observing?: ObserveView[] }
         if (alive) setObserving(payload.observing ?? [])
+        // ★ **真机状态也画到 3D 场景**（P1c）：面板文字与场景高亮两处一致，
+        //   都来自宿主同一份缓存（`GET /api/observe`）—— **不另开数据源**。
+        if (alive) syncRef.current?.setObservations(payload.observing ?? [])
       } catch {
         // 宿主暂时读不到：保持上一次显示（不闪、不刷屏）
       }

@@ -114,6 +114,20 @@ const CABLE_CLEARANCE = 0.014
 /** 告警高亮色。 */
 const WARNING_COLOR = 0xff5533
 
+/**
+ * **真机观察**高亮的颜色（P1c）。
+ *
+ * ★ 与告警红**分开**：观察不是告警 —— 尤其 rror（我们查不到）与 stale（真机离线）
+ *   是两件事，颜色必须能分辨（见 `contracts/observe.ts` 的五态表）。
+ */
+const OBSERVE_COLORS: Record<string, number> = {
+  ok: 0x55dd88, // 绿：真机在线
+  stale: 0xffc266, // 琥珀：真机确实离线（数据很旧）
+  error: 0xff5533, // 红：**我们查不到**（地址/鉴权）—— 与硬件无关
+  not_found: 0x8899aa, // 灰蓝：服务端里没有这台设备
+  idle: 0x8899aa, // 还没查到
+}
+
 interface ComponentVisual {
   /**
    * 组件根：承载**位置/旋转**与 `MeshUserData`。
@@ -130,6 +144,8 @@ interface ComponentVisual {
   cancelSwap: () => void
   /** 告警高亮框（懒建：没有告警的组件不背这个盒子）。 */
   highlight?: THREE.Mesh
+  /** **真机观察**高亮框（懒建；比告警框略大，颜色按观察状态）。 */
+  observeHighlight?: THREE.Mesh
   /**
    * 钉住标记（懒建）。
    *
@@ -169,6 +185,8 @@ export class SceneSyncLayer implements SceneLayer {
   private readonly source: SnapshotSource
   private readonly group = new THREE.Group()
   private readonly components = new Map<string, ComponentVisual>()
+  /** 真机观察状态（**只反映，不记住**：源永远是宿主的 GET /api/observe）。 */
+  private observations: readonly { readonly componentId: string; readonly status: string }[] = []
   private readonly cables = new Map<string, CableVisual>()
 
   /** 端口锚点共用几何/材质（图层级，dispose 时统一释放）。 */
@@ -342,6 +360,8 @@ export class SceneSyncLayer implements SceneLayer {
     this.group.updateMatrixWorld(true)
     this.reconcileCables(snapshot)
     this.applyWarnings(snapshot)
+    // ★ 真机观察高亮：与告警**分开**画（观察不是告警）
+    this.applyObservationHighlights()
   }
 
   private reconcileComponents(snapshot: AssemblySnapshot): void {
@@ -456,22 +476,73 @@ export class SceneSyncLayer implements SceneLayer {
     }
   }
 
-  /** 告警外框：略大于几何包围盒的半透明红框。 */
-  private createHighlight(visual: ComponentVisual): THREE.Mesh {
+  /**
+   * **真机观察高亮**（P1c）—— 把"我们观察到的那台真机"画在场景里。
+   *
+   * ★★ 为什么不是"另一种告警"：**观察不是告警**。观察失败（我们查不到）
+   *   与设备离线是两件事（见 `contracts/observe.ts`），颜色也必须能分辨：
+   *
+   * | 状态 | 颜色 | 含义 |
+   * |---|---|---|
+   * | `ok` | 绿 | 真机在线 |
+   * | `stale` | 琥珀 | 真机**确实离线**（数据很旧）|
+   * | `error` | 红 | **我们查不到**（地址/鉴权）—— 与硬件无关 |
+   * | `not_found` | 灰蓝 | 服务端里没有这台设备 |
+   *
+   * ★ 盒子比告警框**略大**（1.10 vs 1.06）且名字不同：两者同时存在时也分得清。
+   * ★ 前端**只反映**、不记住：观察状态源永远是宿主的 `GET /api/observe`。
+   */
+  setObservations(observations: readonly { readonly componentId: string; readonly status: string }[]): void {
+    this.observations = observations
+    this.applyObservationHighlights()
+  }
+
+  private applyObservationHighlights(): void {
+    const byComponent = new Map<string, string>()
+    for (const item of this.observations) byComponent.set(item.componentId, item.status)
+    for (const [id, visual] of this.components) {
+      const status = byComponent.get(id)
+      if (status === undefined) {
+        if (visual.observeHighlight) visual.observeHighlight.visible = false
+        continue
+      }
+      const color = OBSERVE_COLORS[status] ?? OBSERVE_COLORS.not_found ?? 0x8899aa
+      if (visual.observeHighlight === undefined) {
+        visual.observeHighlight = this.createHighlight(visual, color, 'observe-highlight', 1.1)
+      } else {
+        const material = visual.observeHighlight.material as THREE.MeshBasicMaterial
+        material.color.setHex(color)
+      }
+      visual.observeHighlight.visible = true
+    }
+  }
+
+  /**
+   * 告警外框：略大于几何包围盒的半透明红框。
+   *
+   * ★ `color` / `name` / `scale` 参数化，是为了让**真机观察高亮**复用同一套画法
+   *   （两者形状相同、语义不同 ⇒ 靠颜色与尺寸区分，而不是各写一份画法）。
+   */
+  private createHighlight(
+    visual: ComponentVisual,
+    color: number = WARNING_COLOR,
+    name = 'warning-highlight',
+    scale = 1.06,
+  ): THREE.Mesh {
     const box = new THREE.Box3().setFromObject(visual.slot).getSize(new THREE.Vector3())
     const geometry = new THREE.BoxGeometry(
-      Math.max(box.x, 1e-4) * 1.06,
-      Math.max(box.y, 1e-4) * 1.06,
-      Math.max(box.z, 1e-4) * 1.06,
+      Math.max(box.x, 1e-4) * scale,
+      Math.max(box.y, 1e-4) * scale,
+      Math.max(box.z, 1e-4) * scale,
     )
     const material = new THREE.MeshBasicMaterial({
-      color: WARNING_COLOR,
+      color,
       transparent: true,
       opacity: 0.22,
       depthWrite: false,
     })
     const mesh = new THREE.Mesh(geometry, material)
-    mesh.name = 'warning-highlight'
+    mesh.name = name
     visual.root.add(mesh)
     return mesh
   }
