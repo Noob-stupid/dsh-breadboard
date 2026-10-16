@@ -17,7 +17,7 @@
  */
 import z from '@deepseek-ai/schemastery'
 import { existsSync, readFileSync } from 'node:fs'
-import { mkdir as mkdirFs, writeFile as writeFileFs } from 'node:fs/promises'
+import { mkdir as mkdirFs, readdir, readFile as readFileFs, stat as statFs, writeFile as writeFileFs } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,6 +39,7 @@ import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
 import { createObserveTools } from './host/observe-tools.ts'
 import { createModelDefTools } from './host/model-def-tools.ts'
+import { platformioRoots } from './core/models/variant.ts'
 import { RealDeviceObserver } from './core/sim/observer.ts'
 import { zhizuoObserveConfig } from './core/sim/zhizuo-observe.ts'
 import type { ObserveView } from './contracts/protocol.ts'
@@ -916,6 +917,27 @@ export function apply(ctx: AppContext, config: Config): void {
             await mkdirFs(dir, { recursive: true })
           },
           join: (dir, name) => path.join(dir, name),
+          // ★ P0.4：从 PlatformIO 的**权威文件**推导引脚表（不联网、不猜）。
+          //   ★ 根目录按**用户路径**优先（env → 主目录 → 平台惯例），不写死本机路径。
+          variant: {
+            roots: platformioRoots(process.env, homedir()),
+            io: {
+              listDirs: async (dir) =>
+                (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name),
+              listFiles: async (dir) =>
+                (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile()).map((e) => e.name),
+              readText: (file) => readFileFs(file, 'utf8'),
+              exists: async (candidate) => {
+                try {
+                  await statFs(candidate)
+                  return true
+                } catch {
+                  return false
+                }
+              },
+              join: (...parts) => path.join(...parts),
+            },
+          },
         })) {
           networkDisposers.push(toolRegistry.register(definition))
           registeredToolNames.push(definition.name)

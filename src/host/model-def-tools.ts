@@ -29,6 +29,7 @@
  */
 
 import { installModelDefinition, type ModelDefLoadResult } from '../core/models/definitions.ts'
+import { draftForBoard, listBoards, type VariantIo } from '../core/models/variant.ts'
 import { asRecord, text, type HardwareToolDefinition } from './tools.ts'
 
 export interface ModelDefToolDeps {
@@ -40,6 +41,15 @@ export interface ModelDefToolDeps {
   readonly writeFile: (file: string, text: string) => Promise<void>
   readonly mkdir: (dir: string) => Promise<void>
   readonly join: (dir: string, name: string) => string
+  /**
+   * **PlatformIO 的发现依赖**（P0.4：从权威文件推导引脚表）。
+   * ★ 注入而不是内联读盘：这条链要能**确定性测试**，
+   *   而测试不该依赖"本机装没装 PlatformIO"。
+   */
+  readonly variant: {
+    readonly roots: readonly string[]
+    readonly io: VariantIo
+  }
 }
 
 export function createModelDefTools(deps: ModelDefToolDeps): HardwareToolDefinition[] {
@@ -121,6 +131,91 @@ export function createModelDefTools(deps: ModelDefToolDeps): HardwareToolDefinit
             (failures.length + rejected.length === 0
               ? ''
               : `\n⚠️ 同时有 ${String(failures.length + rejected.length)} 条别的定义没装上（用 GET /api/catalog 或看日志）。`),
+        }
+      },
+    },
+
+    /* ── ★ P0.4：从**权威文件**推导引脚表草稿 ───────────────────────────── */
+    {
+      name: 'hw_scan_board_pins',
+      description:
+        '**从本机 PlatformIO 的权威文件推导一块板子的引脚表草稿**（不联网、不猜）。' +
+        '★ 权威链：`platforms/<platform>/boards/<board>.json` → `build.variant` → ' +
+        '`packages/framework-arduino*/variants/<variant>/pins_arduino.h` —— ' +
+        '**那份文件就是编译器用来把 `SDA` 翻译成 GPIO21 的东西**，比网上任何 pinout 图都硬。' +
+        '★ `list:true` 列出本机能找到的板子（242+ 个）；`board:"esp32dev"` 给出该板的引脚草稿。' +
+        '★★ **它给不出什么（这是关键）**：' +
+        '① **物理排布** —— 哪个脚在排针的哪个位置（决定 `portLayout`）；' +
+        '② **电气语义** —— 哪个脚是 5V / 要不要上拉 / 哪个是 I2C；' +
+        '③ **丝印** —— `SDA`/`TX` 是功能名，不等于板子上印的字。' +
+        '⇒ 所以它产出的是**草稿 + 缺口清单**，**不是能直接装的成品**：缺口要按数据手册/机械图补，' +
+        '再交给 `hw_save_model_definition`。★ 找不到来源时**说清为什么**（没装 PlatformIO / 板子 id 错 / variant 缺文件）。',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          list: { type: 'boolean', description: 'true = 只列出本机能找到的板子（不生成草稿）' },
+          board: { type: 'string', description: '板子 id，如 esp32dev（PlatformIO 的 board 名）' },
+          limit: { type: 'number', description: 'list 时最多列多少个板子 id（默认 40）' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            ok: { type: 'boolean' },
+            reason: { type: 'string' },
+            message: { type: 'string' },
+          },
+          required: ['ok'],
+        },
+        render: (_args, value) => {
+          const result = asRecord(value)
+          if (result.ok !== true) return text(`扫板子失败：${String(result.reason ?? '未知原因')}`)
+          return text(String(result.message ?? ''))
+        },
+      },
+      execute: async (args) => {
+        const input = asRecord(args)
+        const { roots, io } = deps.variant
+
+        if (input.list === true) {
+          const { boards, platforms } = await listBoards(roots, io)
+          if (boards.length === 0) {
+            return {
+              ok: false,
+              reason:
+                '没找到 PlatformIO 的板子定义（没装 PlatformIO，或装在别处 —— 可用 PLATFORMIO_CORE_DIR 指定）。',
+            }
+          }
+          const limit = typeof input.limit === 'number' ? input.limit : 40
+          const sample = boards.slice(0, limit).map((board) => `${board.id}（${board.name}）`)
+          return {
+            ok: true,
+            message:
+              `本机 PlatformIO 里有 ${String(boards.length)} 块板子（platform：${platforms.join(', ')}）。\n` +
+              `前 ${String(sample.length)} 个：\n  ${sample.join('\n  ')}\n` +
+              '★ 用 hw_scan_board_pins({board:"<id>"}) 取某一块的引脚草稿。',
+          }
+        }
+
+        const boardId = typeof input.board === 'string' ? input.board : ''
+        if (boardId === '') return { ok: false, reason: '需要 board（板子 id），或用 list:true 先看有哪些' }
+        const result = await draftForBoard(roots, boardId, io)
+        if (!result.ok) return { ok: false, reason: result.reason }
+        const { draft } = result
+        const lines = draft.pins.map((pin) => `${pin.name} = GPIO${String(pin.gpio)}`)
+        return {
+          ok: true,
+          message:
+            `板子：${draft.board.name}（${draft.board.id}）· MCU ${draft.board.mcu ?? '?'} · variant ${draft.board.variant ?? '?'}\n` +
+            `出处：${draft.source}\n` +
+            `解析出 ${String(draft.pins.length)} 条引脚名 ↔ GPIO：\n  ${lines.join('\n  ')}\n\n` +
+            '★★ **这份草稿还不是成品**，缺口如下（必须补，否则装上去就是"看起来对但接错脚"）：\n' +
+            draft.gaps.map((gap) => `  · ${gap}`).join('\n') +
+            '\n\n下一步：按数据手册/机械图把上面三项补齐，再用 hw_save_model_definition 装上；' +
+            '补不出来的部分**问用户**，不要编。',
         }
       },
     },
