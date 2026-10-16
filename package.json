@@ -21,7 +21,8 @@
     "docs",
     "models",
     "scripts",
-    "model-defs"
+    "model-defs",
+    "tools"
   ],
   "license": "BSD-3-Clause",
   "peerDependencies": {

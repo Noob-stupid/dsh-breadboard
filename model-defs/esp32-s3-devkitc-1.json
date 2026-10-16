@@ -1,0 +1,548 @@
+{
+  "_source": {
+    "kind": "espressif-official-docs",
+    "boardId": "esp32-s3-devkitc-1",
+    "file": "C:\\Users\\花火\\AppData\\Local\\Temp\\s3guide.rst",
+    "extractedAt": "2026-10-16T09:13:49.483Z",
+    "note": "排针表（脚位/丝印/电气类型/GPIO）由官方文档 .rst **机械提取**。⚠️ size 是**按排针几何推算**的（每排 22 脚 × 2.54mm；两排间距 22.86mm；高度估 10mm），**不是官方外形尺寸** —— 官方只有 DXF/PDF，本机取不到（DXF 解析不出外形、产品页 403）。拿到官方尺寸请替换 size。"
+  },
+  "key": "esp32-s3-devkitc-1",
+  "label": "Espressif esp32-s3-devkitc-1",
+  "size": {
+    "x": 0.02286,
+    "y": 0.01,
+    "z": 0.053340000000000005
+  },
+  "powerDrawW": 0,
+  "powerSupplyW": 0,
+  "ports": [
+    {
+      "portId": "J1P1",
+      "name": "3V3",
+      "protocol": "power",
+      "voltage": 3.3,
+      "direction": "power",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.026670000000000003
+      }
+    },
+    {
+      "portId": "J1P2",
+      "name": "3V3",
+      "protocol": "power",
+      "voltage": 3.3,
+      "direction": "power",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.024130000000000002
+      }
+    },
+    {
+      "portId": "J1P3",
+      "name": "RST",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "in",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.02159
+      }
+    },
+    {
+      "portId": "J1P4",
+      "name": "4 · GPIO4",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.019050000000000004
+      }
+    },
+    {
+      "portId": "J1P5",
+      "name": "5 · GPIO5",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.016510000000000004
+      }
+    },
+    {
+      "portId": "J1P6",
+      "name": "6 · GPIO6",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.013970000000000002
+      }
+    },
+    {
+      "portId": "J1P7",
+      "name": "7 · GPIO7",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.011430000000000003
+      }
+    },
+    {
+      "portId": "J1P8",
+      "name": "15 · GPIO15",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.008890000000000002
+      }
+    },
+    {
+      "portId": "J1P9",
+      "name": "16 · GPIO16",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.0063500000000000015
+      }
+    },
+    {
+      "portId": "J1P10",
+      "name": "17 · GPIO17",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.003810000000000001
+      }
+    },
+    {
+      "portId": "J1P11",
+      "name": "18 · GPIO18",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": -0.0012700000000000003
+      }
+    },
+    {
+      "portId": "J1P12",
+      "name": "8 · GPIO8",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.0012700000000000003
+      }
+    },
+    {
+      "portId": "J1P13",
+      "name": "3 · GPIO3",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.0038099999999999974
+      }
+    },
+    {
+      "portId": "J1P14",
+      "name": "46 · GPIO46",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.006349999999999998
+      }
+    },
+    {
+      "portId": "J1P15",
+      "name": "9 · GPIO9",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.008889999999999999
+      }
+    },
+    {
+      "portId": "J1P16",
+      "name": "10 · GPIO10",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.01143
+      }
+    },
+    {
+      "portId": "J1P17",
+      "name": "11 · GPIO11",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.01397
+      }
+    },
+    {
+      "portId": "J1P18",
+      "name": "12 · GPIO12",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.01651
+      }
+    },
+    {
+      "portId": "J1P19",
+      "name": "13 · GPIO13",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.01905
+      }
+    },
+    {
+      "portId": "J1P20",
+      "name": "14 · GPIO14",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.02159
+      }
+    },
+    {
+      "portId": "J1P21",
+      "name": "5V",
+      "protocol": "power",
+      "voltage": 5,
+      "direction": "power",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.024130000000000002
+      }
+    },
+    {
+      "portId": "J1P22",
+      "name": "G",
+      "protocol": "power",
+      "voltage": 0,
+      "direction": "ground",
+      "position": {
+        "x": -0.01143,
+        "y": 0.003,
+        "z": 0.026670000000000003
+      }
+    },
+    {
+      "portId": "J3P1",
+      "name": "G",
+      "protocol": "power",
+      "voltage": 0,
+      "direction": "ground",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.026670000000000003
+      }
+    },
+    {
+      "portId": "J3P2",
+      "name": "TX · GPIO43",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.024130000000000002
+      }
+    },
+    {
+      "portId": "J3P3",
+      "name": "RX · GPIO44",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.02159
+      }
+    },
+    {
+      "portId": "J3P4",
+      "name": "1 · GPIO1",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.019050000000000004
+      }
+    },
+    {
+      "portId": "J3P5",
+      "name": "2 · GPIO2",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.016510000000000004
+      }
+    },
+    {
+      "portId": "J3P6",
+      "name": "42 · GPIO42",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.013970000000000002
+      }
+    },
+    {
+      "portId": "J3P7",
+      "name": "41 · GPIO41",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.011430000000000003
+      }
+    },
+    {
+      "portId": "J3P8",
+      "name": "40 · GPIO40",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.008890000000000002
+      }
+    },
+    {
+      "portId": "J3P9",
+      "name": "39 · GPIO39",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.0063500000000000015
+      }
+    },
+    {
+      "portId": "J3P10",
+      "name": "38 · GPIO38",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.003810000000000001
+      }
+    },
+    {
+      "portId": "J3P11",
+      "name": "37 · GPIO37",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": -0.0012700000000000003
+      }
+    },
+    {
+      "portId": "J3P12",
+      "name": "36 · GPIO36",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.0012700000000000003
+      }
+    },
+    {
+      "portId": "J3P13",
+      "name": "35 · GPIO35",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.0038099999999999974
+      }
+    },
+    {
+      "portId": "J3P14",
+      "name": "0 · GPIO0",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.006349999999999998
+      }
+    },
+    {
+      "portId": "J3P15",
+      "name": "45 · GPIO45",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.008889999999999999
+      }
+    },
+    {
+      "portId": "J3P16",
+      "name": "48 · GPIO48",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.01143
+      }
+    },
+    {
+      "portId": "J3P17",
+      "name": "47 · GPIO47",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.01397
+      }
+    },
+    {
+      "portId": "J3P18",
+      "name": "21 · GPIO21",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.01651
+      }
+    },
+    {
+      "portId": "J3P19",
+      "name": "20 · GPIO20",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.01905
+      }
+    },
+    {
+      "portId": "J3P20",
+      "name": "19 · GPIO19",
+      "protocol": "gpio",
+      "voltage": 3.3,
+      "direction": "io",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.02159
+      }
+    },
+    {
+      "portId": "J3P21",
+      "name": "G",
+      "protocol": "power",
+      "voltage": 0,
+      "direction": "ground",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.024130000000000002
+      }
+    },
+    {
+      "portId": "J3P22",
+      "name": "G",
+      "protocol": "power",
+      "voltage": 0,
+      "direction": "ground",
+      "position": {
+        "x": 0.01143,
+        "y": 0.003,
+        "z": 0.026670000000000003
+      }
+    }
+  ]
+}
