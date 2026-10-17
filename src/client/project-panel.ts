@@ -921,6 +921,10 @@ export function ProjectPanel(props: ProjectPanelProps) {
     {
       title: '③ 项目（一键换整套硬件）',
       subtitle: '点一下：清空场景，换成该项目真实的器件与接线',
+      // ★ **默认收起**（用户 2026-10-16 明确：「所有面板默认都是收起的」）——
+      //   之前只有 ③ 是展开的，四个面板一起展开会占掉半个屏幕。
+      //   主操作仍是 ③，所以它排在面板列的最前面（收起不等于靠后）。
+      defaultOpen: false,
     },
     ...body,
   )
