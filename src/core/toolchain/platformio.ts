@@ -119,13 +119,22 @@ export async function flashFirmware(input: {
 
   const combined = `${result.stdout}\n${result.stderr}`
   if (result.exitCode !== 0) {
+    // ★ 常见原因里**必须包含**"工程没配 upload_port 且没给 --upload-port" ——
+    //   这条是**实测**出来的：在智座工程上跑，它先编译成功（Successfully created esp32 image），
+    //   然后在上传处报 `Please specify upload_port ...`。
+    //   ⇒ 只列"板子没插/端口占用"会把人往硬件方向引，而真正要改的是**命令参数**。
+    const hints = [
+      '工程没配 upload_port 且没给 --upload-port（**实测最常见**）',
+      '板子没插（一个 COM 口都没有）',
+      '端口被占用（串口监视器没关）',
+      '串口驱动没装（CP210x / CH34x）',
+      '芯片型号与工程不符',
+    ]
     return {
       ok: false,
       exitCode: result.exitCode,
       cli: input.cli,
-      summary:
-        `烧录失败（退出码 ${String(result.exitCode)}）。★ 常见原因：板子没插 / 端口被占用 / ` +
-        '串口驱动没装 / 芯片型号与工程不符。下面是要看的日志尾部。',
+      summary: `烧录失败（退出码 ${String(result.exitCode)}）。★ 常见原因：\n  · ${hints.join('\n  · ')}`,
       logTail: tail(combined),
     }
   }

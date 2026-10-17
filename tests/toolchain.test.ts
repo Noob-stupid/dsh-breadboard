@@ -89,6 +89,10 @@ test('★ 失败必须带回**日志尾部**（"烧录失败"四个字没法排�
   assert.equal(result.exitCode, 2)
   assert.match(result.logTail ?? '', /Failed to connect to ESP32/, '要能看到真正的原因那一行')
   assert.match(result.summary, /板子没插|端口被占用|驱动|型号/)
+  // ★ 这条是**实测**加进来的：在智座工程上跑，PlatformIO 先编译成功、
+  //   再在上传处报 `Please specify upload_port ...` —— 真正要改的是**命令参数**，
+  //   而只列"板子没插"会把人往硬件方向引。
+  assert.match(result.summary, /upload_port/, '常见原因里必须有"工程没配 upload_port"这条')
   // 尾部只留最后几行，不要把整篇编译日志倒给用户
   assert.ok((result.logTail ?? '').split('\n').length <= 12)
 })

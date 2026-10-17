@@ -40,6 +40,8 @@ import { createProjectTools, geometryKeys, projectStatuses } from './host/projec
 import { createObserveTools } from './host/observe-tools.ts'
 import { createModelDefTools } from './host/model-def-tools.ts'
 import { platformioRoots } from './core/models/variant.ts'
+import { createToolchainTools } from './host/toolchain-tools.ts'
+import { platformioCliCandidates, type ToolRunResult, type ToolchainIo } from './core/toolchain/platformio.ts'
 import { RealDeviceObserver } from './core/sim/observer.ts'
 import { zhizuoObserveConfig } from './core/sim/zhizuo-observe.ts'
 import type { ObserveView } from './contracts/protocol.ts'
@@ -943,6 +945,61 @@ export function apply(ctx: AppContext, config: Config): void {
           registeredToolNames.push(definition.name)
         }
         log('已注册型号定义工具（hw_save_model_definition）')
+
+        // ★★ **工具链工具**（P3：烧录）—— 走宿主的 `subprocess`，不绕开宿主能力。
+        //   ★ 能力在 **apply 时取一次**（`ctx.subprocess`）：留在请求期读，
+        //     一旦 fiber 的 ctx 失效，handler 会抛异常而被宿主吞成空 body 的 400（实测踩过）。
+        {
+          const subprocess = ctx.subprocess as SubprocessLike | undefined
+          const toolchainIo: ToolchainIo = {
+            exists: async (candidate) => {
+              try {
+                await statFs(candidate)
+                return true
+              } catch {
+                return false
+              }
+            },
+            join: (...parts) => path.join(...parts),
+            run: async (command, args, cwd) => {
+              if (subprocess === undefined) throw new Error('宿主没有 subprocess 服务')
+              return await new Promise<ToolRunResult>((resolve, reject) => {
+                let stdout = ''
+                let stderr = ''
+                try {
+                  const handle = subprocess.spawn({
+                    argv: [command, ...args],
+                    cwd,
+                    stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
+                    graceMs: 1000,
+                    env: { ...process.env },
+                  })
+                  const collect = (stream: NodeJS.ReadableStream | undefined, sink: (chunk: string) => void) => {
+                    if (stream === undefined) return
+                    stream.setEncoding?.('utf8')
+                    stream.on('data', (chunk: string | Buffer) => sink(String(chunk)))
+                  }
+                  collect(handle.stdout, (chunk) => (stdout += chunk))
+                  collect(handle.stderr, (chunk) => (stderr += chunk))
+                  void handle.done.then(
+                    (outcome) => resolve({ exitCode: outcome.exitCode ?? -1, stdout, stderr }),
+                    (error: unknown) => reject(error instanceof Error ? error : new Error(String(error))),
+                  )
+                } catch (error) {
+                  reject(error instanceof Error ? error : new Error(String(error)))
+                }
+              })
+            },
+          }
+          for (const definition of createToolchainTools({
+            cliCandidates: platformioCliCandidates(process.env, homedir(), process.platform),
+            io: toolchainIo,
+          })) {
+            networkDisposers.push(toolRegistry.register(definition))
+            registeredToolNames.push(definition.name)
+          }
+          log('已注册工具链工具（hw_flash_firmware）')
+        }
       } catch (error) {
         warn(`联网设备工具注册失败（已回滚）：${String(error)}`)
         registeredToolNames.length = 0
