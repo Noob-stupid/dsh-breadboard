@@ -39,6 +39,7 @@ import { createNetworkTools } from './host/network-tools.ts'
 import { createProjectTools, geometryKeys, projectStatuses } from './host/project-tools.ts'
 import { createObserveTools } from './host/observe-tools.ts'
 import { createModelDefTools } from './host/model-def-tools.ts'
+import { createModelSourceTools } from './host/model-source-tools.ts'
 import { platformioRoots } from './core/models/variant.ts'
 import { createToolchainTools } from './host/toolchain-tools.ts'
 import { platformioCliCandidates, type ToolRunResult, type ToolchainIo } from './core/toolchain/platformio.ts'
@@ -945,6 +946,21 @@ export function apply(ctx: AppContext, config: Config): void {
           registeredToolNames.push(definition.name)
         }
         log('已注册型号定义工具（hw_save_model_definition）')
+
+        // ★★ **模型来源工具** —— 把"库里缺几何"这件事变成 agent 一轮能做完的闭环：
+        //   hw_list_missing_models（缺哪些）→ hw_model_workorder（出工单）
+        //   → 外部建模工具产出 → hw_import_model_file（按路径登记）。
+        //   ★ 不直调别的插件的工具：`tools.get()` + `.execute()` 会**绕过审批与 guard**，
+        //     那条通道不该为"顺手自动化"打开。跨插件的动作由 agent 按工单去调，
+        //     审批/权限/可见性照常生效。
+        for (const definition of createModelSourceTools({
+          models,
+          workDir: path.join(path.dirname(modelsRoot), 'model-workorders'),
+        })) {
+          networkDisposers.push(toolRegistry.register(definition))
+          registeredToolNames.push(definition.name)
+        }
+        log('已注册模型来源工具（hw_list_missing_models / hw_model_workorder / hw_import_model_file）')
 
         // ★★ **工具链工具**（P3：烧录）—— 走宿主的 `subprocess`，不绕开宿主能力。
         //   ★ 能力在 **apply 时取一次**（`ctx.subprocess`）：留在请求期读，

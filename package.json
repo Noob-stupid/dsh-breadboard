@@ -1,6 +1,6 @@
 {
   "name": "@noob-stupid/dsh-breadboard",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": {
     "name": "dsh-breadboard",
     "url": "https://github.com/Noob-stupid/dsh-breadboard"
@@ -33,7 +33,8 @@
     "@deepseek-ai/schemastery": "^3.18.2"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@deepseek-ai/schemastery": "^3.19.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.2.2",
     "@types/three": "^0.180.0",
     "@types/ws": "^8.18.2",

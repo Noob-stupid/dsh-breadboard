@@ -57,7 +57,31 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 `hw_list_projects` 会列出内置演示项目（**zhizuo-seat-node**）以及它当前是否软硬件连通；
 `hw_import_project` 一次把它的器件、连线与联网绑定摆好。
 
+## ★ 与其它 DSH 插件协作：缺模型不再卡住
+
+这个插件**不自己造模型**，而是把"造模型"交给**更擅长的插件**做完，自己只负责**契约与验收**。
+典型搭档是 [DSH × Blender](https://github.com/sixtysevenlf/dsh-blender-plugin)（参考图量测、按真实尺寸建模、导出 GLB）：
+
+```
+hw_list_missing_models   →  缺哪些型号（附声明尺寸 mm）
+hw_model_workorder       →  工单：朝向 / 原点 / 比例 / 导出要求 / 产出后怎么登记
+        ↓   交给建模插件（blender_rt_* 等）
+      GLB
+        ↓
+hw_import_model_file     →  登记，并核对三边比例（> 1.15 就停下，别靠拉伸糊过去）
+```
+
+**工单里那三条是硬约束，写错会静默出错**：`x=长 / y=厚 / z=宽`（镜像了包围盒看不出来、端口会落到另一侧）、
+原点在包围盒中心、比例等于声明 `size`（不符只会压变形，而 2.54mm 针距这类代码会一起失准）。
+
+**为什么是"工单"而不是插件之间互相直调**：宿主的 `tools` 服务确实能取到别的插件的工具定义并 `.execute()` 直调，
+但那条路**绕过审批与 guard**。用它做"自动建模"等于开一条不受审的写操作通道。
+⇒ **协作发生在 agent 这一层**：本插件把契约说准，动作由 agent 去调对方工具，审批/权限/可见性照常生效。
+好处是**任何建模插件都能接**（Blender、别的 DCC、甚至人自己建），不绑死一家。
+
 ## 界面导览
+
+
 
 界面目前**只有中文**，下表用的就是屏幕上那行字。
 
@@ -90,7 +114,7 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 或者干脆跳过 1–3：把系统用话讲给 agent，让它用 **`hw_save_project`** 写成图纸，
 再用 **`hw_import_project`** 一次把器件、连线、联网绑定全部摆好。
 
-## Agent 工具：16 个 `hw_*`
+## Agent 工具：19 个 `hw_*`
 
 以下是**实际注册的清单**（未增未删）。「什么时候用」这一列才是表格的意义 —— 这些工具并不通用互换。
 
@@ -139,6 +163,16 @@ dsh plugin --profile web add github:Noob-stupid/dsh-breadboard
 | 工具 | 作用 | 什么时候用 |
 |---|---|---|
 | `hw_watch_device` | **观察一台真机**：定时**只读**查询外部系统（智座用 `GET /api/admin/sensor/devices`），把真机状态映射到场景器件上。`action` = `start` / `stop` / `status` | 想知道"**真机现在到底连没连上**"。⚠️ 它与 `hw_network_add` 方向**相反**：那个是我们**冒充设备**发请求，这个是**我们去问真机**（只读、无对外副作用） |
+
+### 模型来源（缺模型时怎么补 —— 与外部建模插件协作）
+
+| 工具 | 作用 | 什么时候用 |
+|---|---|---|
+| `hw_list_missing_models` | 列出**库里声明了、但还没有几何**的型号（它们只显示占位盒），附声明尺寸 mm | 接手项目要补建模时**先看这张单子**，别一个个试 |
+| `hw_model_workorder` | 给某个型号出**可直接交给建模工具**的工单：声明尺寸、朝向约定、原点规则、导出要求、产出后怎么登记 | 决定"这个型号得建"，且要用外部建模插件（Blender 等）来做时 |
+| `hw_import_model_file` | 把**本机文件**登记成某型号的几何（glb/gltf/obj/stl/fbx/dae/3mf）。GLB 会量三边比例并与声明 `size` 比对 | 建模工具导出之后。⚠️ 只换几何，**不动** `size` 与端口 |
+
+**这三件合起来是个闭环**：`hw_list_missing_models` → `hw_model_workorder` → （外部建模插件产出 GLB）→ `hw_import_model_file`。
 
 ## 原因码与对策
 

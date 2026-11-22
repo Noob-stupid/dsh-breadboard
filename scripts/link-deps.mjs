@@ -85,7 +85,18 @@ link('cosmokit', path.join(checkout, 'vendor', 'cosmokit'))
 link('@deepseek-ai/dsh-tools', path.join(checkout, 'packages', 'core', 'tools'))
 link('@deepseek-ai/dsh-llm', path.join(checkout, 'packages', 'llm', 'llm'))
 link('@deepseek-ai/dsh-system-prompt', path.join(checkout, 'packages', 'core', 'system-prompt'))
-link('@types/node', path.join(checkout, 'node_modules', '@types', 'node'))
+// ★ `@types/node` **只有在 checkout 里是完整包时才能链**。
+//   踩过的坑：`<checkout>/node_modules/@types/node` 可能只剩一个**空目录**
+//   （目录在、`package.json` 不在），而 `link()` 只查"目录存在"⇒ 会链过去，
+//   于是 `tsc` 报 `TS2688 Cannot find type definition file for 'node'`，
+//   而错误信息完全指向不到"是一个坏链接"。
+//   ⇒ 校验条件改成"是不是一个真包"，而不是"有没有这个目录"。
+const nodeTypesTarget = path.join(checkout, 'node_modules', '@types', 'node')
+if (fs.existsSync(path.join(nodeTypesTarget, 'package.json'))) {
+  link('@types/node', nodeTypesTarget)
+} else {
+  warn(`跳过 @types/node：${nodeTypesTarget} 不是完整包（缺 package.json），保留已安装的那份`)
+}
 
 // ② 运行时依赖：schemastery 是值导入，必须拿到**已构建**的 JS
 const profileNm = path.join(

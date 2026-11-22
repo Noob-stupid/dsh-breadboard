@@ -103,7 +103,36 @@ Or skip steps 1–3 entirely: describe the system to the agent and let it call *
 to write a blueprint, then **`hw_import_project`** to place every part, wire and network binding in
 one go.
 
-## Agent tools: 16 `hw_*` tools
+## ★ Collaborating with other DSH plugins: missing models no longer block you
+
+This plugin does **not** model anything itself. It hands "make the geometry" to a plugin that is
+better at it, and keeps only the **contract** and the **acceptance check**. The usual partner is
+[DSH × Blender](https://github.com/sixtysevenlf/dsh-blender-plugin) (reference-image measurement,
+true-scale modeling, GLB export):
+
+```
+hw_list_missing_models   →  which declared models have no geometry (with declared size in mm)
+hw_model_workorder       →  a work order: orientation / origin / proportion / export rules
+        ↓   hand it to the modeling plugin (blender_rt_* …)
+      GLB
+        ↓
+hw_import_model_file     →  register it, and check the three-edge proportion (> 1.15 → stop)
+```
+
+The three rules in a work order are **hard constraints that fail silently** when broken:
+`x = length / y = thickness / z = width` (a mirrored model looks identical by bounding box while
+ports land on the wrong side), origin at the bounding-box center, and proportions equal to the
+declared `size` (a mismatch does not error — it just squashes the model, and every "real
+dimension" assumption such as 2.54 mm pitch goes wrong with it).
+
+**Why a work order instead of plugins calling each other directly:** the host `tools` service can
+fetch another plugin's tool definition and `.execute()` it, but that path **bypasses approval and
+guards**. Using it for "auto-model everything" would open an unaudited write channel. So
+**collaboration happens at the agent layer**: this plugin states the contract, the agent invokes
+the partner's tools, and approval/permission/visibility keep working. The upside is that **any
+modeling plugin — or a human — can take the work order**; nothing is locked to one vendor.
+
+## Agent tools: 19 `hw_*` tools
 
 This is the actual registered list (nothing added, nothing omitted). The **when to use** column is
 the point of the table: these tools are not interchangeable.
